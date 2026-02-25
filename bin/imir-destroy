@@ -1,0 +1,23 @@
+#!/bin/bash
+set -euo pipefail
+
+IMIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$IMIR_ROOT/config.env"
+export HCLOUD_TOKEN
+
+NAME="${1:?Usage: imir-destroy <name>}"
+SSH_KEY_PATH="${SSH_KEY_PATH/#\~/$HOME}"
+
+# Verify server exists
+IP=$(hcloud server ip "imir-$NAME" 2>/dev/null) || {
+    echo "Error: dev box '$NAME' not found."
+    exit 1
+}
+
+echo "Destroying dev box '$NAME' ($IP)..."
+hcloud server delete "imir-$NAME"
+
+# Clean up known_hosts
+ssh-keygen -R "$IP" 2>/dev/null || true
+
+echo "Dev box '$NAME' destroyed."

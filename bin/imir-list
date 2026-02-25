@@ -1,0 +1,8 @@
+#!/bin/bash
+set -euo pipefail
+
+IMIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$IMIR_ROOT/config.env"
+export HCLOUD_TOKEN
+
+hcloud server list -l managed-by=imir -o columns=name,ipv4,status,server_type,datacenter

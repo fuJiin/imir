@@ -1,0 +1,87 @@
+#!/bin/bash
+set -euo pipefail
+
+CHEZMOI_REPO="${1:?Usage: imir-bootstrap <chezmoi-repo>}"
+DEV_USER="dev"
+
+echo "=== Imir Bootstrap ==="
+
+# Wait for cloud-init to finish (may hold apt lock)
+echo "Waiting for cloud-init..."
+cloud-init status --wait 2>/dev/null || true
+
+# ── System setup (as root) ──────────────────────────────────────────
+
+echo "Installing system packages..."
+apt-get update
+apt-get install -y \
+    git \
+    emacs-nox \
+    fish \
+    tmux \
+    mosh \
+    curl \
+    jq \
+    ripgrep \
+    fd-find \
+    build-essential \
+    unzip
+
+# fd-find installs as fdfind on Ubuntu; symlink to fd
+if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
+    ln -sf "$(command -v fdfind)" /usr/local/bin/fd
+fi
+
+# Create dev user
+if ! id "$DEV_USER" &>/dev/null; then
+    echo "Creating user: $DEV_USER"
+    useradd -m -s "$(command -v fish)" -G sudo "$DEV_USER"
+    echo "$DEV_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$DEV_USER"
+    chmod 440 "/etc/sudoers.d/$DEV_USER"
+fi
+
+# Copy SSH authorized_keys from root
+mkdir -p "/home/$DEV_USER/.ssh"
+cp /root/.ssh/authorized_keys "/home/$DEV_USER/.ssh/authorized_keys"
+chown -R "$DEV_USER:$DEV_USER" "/home/$DEV_USER/.ssh"
+chmod 700 "/home/$DEV_USER/.ssh"
+chmod 600 "/home/$DEV_USER/.ssh/authorized_keys"
+
+# ── User setup (as dev) ─────────────────────────────────────────────
+
+echo "Setting up dev environment..."
+
+cat > /tmp/imir-user-setup.sh <<EOF
+#!/bin/bash
+set -euo pipefail
+cd "\$HOME"
+
+# Install chezmoi and apply dotfiles
+echo "Applying dotfiles via chezmoi..."
+sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO"
+
+# Install fnm
+echo "Installing fnm..."
+curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
+
+# Source fnm for this script
+export FNM_PATH="\$HOME/.local/share/fnm"
+export PATH="\$FNM_PATH:\$PATH"
+eval "\$(fnm env)"
+
+# Install Node.js LTS
+echo "Installing Node.js LTS..."
+fnm install --lts
+fnm default lts-latest
+
+# Install Claude Code
+echo "Installing Claude Code..."
+npm install -g @anthropic-ai/claude-code
+
+echo "Done!"
+EOF
+
+chmod +x /tmp/imir-user-setup.sh
+sudo -u "$DEV_USER" bash /tmp/imir-user-setup.sh
+
+echo "=== Imir Bootstrap complete ==="
