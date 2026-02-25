@@ -1,0 +1,63 @@
+#!/bin/bash
+set -euo pipefail
+
+IMIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$IMIR_ROOT/config.env"
+export HCLOUD_TOKEN
+
+NAME="${1:?Usage: imir-create <name> [server-type]}"
+SERVER_TYPE="${2:-$DEFAULT_SERVER_TYPE}"
+
+# Expand SSH_KEY_PATH
+SSH_KEY_PATH="${SSH_KEY_PATH/#\~/$HOME}"
+
+echo "Creating dev box: $NAME ($SERVER_TYPE in $DEFAULT_LOCATION)..."
+
+# Ensure SSH key exists in Hetzner
+if ! hcloud ssh-key describe imir &>/dev/null; then
+    echo "Uploading SSH key to Hetzner..."
+    hcloud ssh-key create --name imir --public-key-from-file "${SSH_KEY_PATH}.pub"
+fi
+
+# Check if server already exists
+if hcloud server describe "imir-$NAME" &>/dev/null; then
+    echo "Error: dev box '$NAME' already exists. Use imir-destroy first."
+    exit 1
+fi
+
+# Create server
+hcloud server create \
+    --name "imir-$NAME" \
+    --type "$SERVER_TYPE" \
+    --location "$DEFAULT_LOCATION" \
+    --image "$DEFAULT_IMAGE" \
+    --ssh-key imir \
+    --label managed-by=imir
+
+# Get IP
+IP=$(hcloud server ip "imir-$NAME")
+echo "Server IP: $IP"
+
+# Wait for SSH to become available
+echo "Waiting for SSH..."
+for i in $(seq 1 30); do
+    if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$SSH_KEY_PATH" root@"$IP" true 2>/dev/null; then
+        break
+    fi
+    if [ "$i" -eq 30 ]; then
+        echo "Error: SSH connection timed out."
+        exit 1
+    fi
+    sleep 2
+done
+
+# Upload and run bootstrap
+echo "Bootstrapping..."
+scp -i "$SSH_KEY_PATH" "$IMIR_ROOT/bin/imir-bootstrap" root@"$IP":/tmp/imir-bootstrap
+ssh -i "$SSH_KEY_PATH" root@"$IP" "bash /tmp/imir-bootstrap '$CHEZMOI_REPO'"
+
+echo ""
+echo "Dev box '$NAME' is ready!"
+echo "  Connect:  imir-connect $NAME"
+echo "  IP:       $IP"
+echo "  User:     dev"
