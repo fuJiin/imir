@@ -16,23 +16,35 @@ Imir spins up Hetzner Cloud VMs pre-configured with your dotfiles, Claude Code, 
 
 ## Getting started
 
+### Install
+
 ```bash
-# 1. Clone the repo
-git clone <repo-url> ~/Code/projects/imir
-cd ~/Code/projects/imir
+curl -fsSL https://raw.githubusercontent.com/fuJiin/imir/main/install.sh | bash
+```
 
-# 2. Configure
-cp config.env.example config.env
-# Edit config.env — at minimum, set HCLOUD_TOKEN
+This installs `imir` to `~/.local/bin` (or `/usr/local/bin`), fish completions, and creates a config file at `~/.config/imir/config.env`.
 
-# 3. Add bin/ to your PATH and completions (fish)
+<details>
+<summary>Alternative: clone the repo</summary>
+
+```bash
+git clone https://github.com/fuJiin/imir.git ~/Code/projects/imir
 fish_add_path ~/Code/projects/imir/bin
-ln -s ~/Code/projects/imir/completions/imir.fish ~/.config/fish/completions/imir.fish
+imir init
+```
 
-# 4. Create a dev box (~2-3 min)
+</details>
+
+### Configure and use
+
+```bash
+# 1. Edit config — at minimum, set HCLOUD_TOKEN
+${EDITOR:-vi} ~/.config/imir/config.env
+
+# 2. Create a dev box (~2-3 min)
 imir create myproject
 
-# 5. Connect (drops into tmux)
+# 3. Connect (drops into tmux)
 imir connect myproject
 ```
 
@@ -40,6 +52,7 @@ imir connect myproject
 
 | Command | Description |
 |---|---|
+| `imir init` | Create config file at `~/.config/imir/config.env`. |
 | `imir create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
 | `imir connect <name> [session]` | SSH into a box with agent forwarding and attach to a tmux session (default: `default`). |
 | `imir ssh <name> [cmd...]` | Plain SSH (no tmux). Runs a command if given, otherwise opens a shell. |
@@ -166,7 +179,7 @@ If you generated a new SSH key for a device (e.g. phone), GitHub also needs to k
 
 ## Configuration
 
-`config.env` (gitignored — copy from `config.env.example`):
+`~/.config/imir/config.env` (created by `imir init`):
 
 | Variable | Default | Description |
 |---|---|---|
