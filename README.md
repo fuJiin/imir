@@ -39,7 +39,7 @@ imir-connect myproject
 
 | Command | Description |
 |---|---|
-| `imir-create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cx23`). |
+| `imir-create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
 | `imir-connect <name>` | SSH into a box with agent forwarding and auto-attach to tmux. |
 | `imir-list` | Show all running imir-managed dev boxes. |
 | `imir-destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
@@ -117,7 +117,7 @@ ssh-add ~/.ssh/id_rsa  # add if needed
 | `HCLOUD_TOKEN` | *(required)* | Hetzner Cloud API token |
 | `SSH_KEY_PATH` | `~/.ssh/id_rsa` | Path to your SSH private key |
 | `CHEZMOI_REPO` | `fuJiin/dotfiles` | GitHub shorthand for your dotfiles |
-| `DEFAULT_SERVER_TYPE` | `cx23` | Hetzner server type (2 vCPU, 4GB RAM) |
+| `DEFAULT_SERVER_TYPE` | `cpx21` | Hetzner server type (3 vCPU, 4GB RAM) |
 | `DEFAULT_LOCATION` | `hil` | Hetzner datacenter (Hillsboro, OR) |
 | `DEFAULT_IMAGE` | `ubuntu-24.04` | Base OS image |
 
@@ -125,11 +125,11 @@ ssh-add ~/.ssh/id_rsa  # add if needed
 
 | Type | vCPU | RAM | Disk | ~Cost/mo |
 |---|---|---|---|---|
-| `cx23` | 2 | 4 GB | 40 GB | $4.35 |
-| `cx33` | 4 | 8 GB | 80 GB | $7.49 |
-| `cx43` | 8 | 16 GB | 160 GB | $14.49 |
+| `cpx21` | 3 | 4 GB | 80 GB | $9.99 |
+| `cpx31` | 4 | 8 GB | 160 GB | $17.99 |
+| `cpx41` | 8 | 16 GB | 240 GB | $33.49 |
 
-Boxes are billed hourly. A `cx23` running for a workday costs ~$0.02.
+Boxes are billed hourly. A `cpx21` running for a workday costs ~$0.05.
 
 ---
 
