@@ -53,12 +53,17 @@ echo "Setting up dev environment..."
 
 cat > /tmp/imir-user-setup.sh <<EOF
 #!/bin/bash
-set -euo pipefail
+set -uo pipefail
 cd "\$HOME"
 
 # Install chezmoi and apply dotfiles
+# Allow failure: run_once scripts may have issues on first run,
+# but the dotfiles themselves will still be applied.
 echo "Applying dotfiles via chezmoi..."
-sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO"
+sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO" || {
+    echo "Warning: chezmoi apply had errors (dotfiles are likely still applied)."
+    echo "Run 'chezmoi apply' manually to retry."
+}
 
 # Install fnm
 echo "Installing fnm..."
