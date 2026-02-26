@@ -2,7 +2,7 @@
 
 Transient dev boxes for AI-assisted coding from any device.
 
-Named after the planet in Adrian Tchaikovsky's *Children of Memory* — a world settled by colonists who had to make do with what they brought and adapt to what they found.
+Named after the planet in Adrian Tchaikovsky's *Children of Memory* — a world settled by colonists who had to make do with what they brought and adapt to what they found. IYKYK.
 
 ## What it does
 
@@ -135,27 +135,16 @@ Boxes are billed hourly. A `cx22` running for a workday costs ~$0.02.
 
 ## Appendix
 
-### Why Hetzner?
+### Decisions
 
-Hillsboro, OR (`hil1`) is ~15-30ms from San Francisco. Comparable latency to AWS us-west-2 at roughly 1/3 the price. The `cx22` at $4.35/mo is hard to beat for a disposable dev box.
-
-### Why tmux (not zellij)?
-
-tmux is the universal multiplexer. Termius has native tmux integration. zellij is nicer in some ways but has no mobile client support. Since the whole point is consistent sessions across laptop and phone, tmux wins.
-
-### Why a `dev` user (not root)?
-
-Claude Code and npm shouldn't run as root. The `dev` user has passwordless sudo for package management but runs tools in userspace. SSH keys are copied from root (Hetzner's default SSH target) during bootstrap.
-
-### Why SSH agent forwarding (not deploy keys)?
-
-Boxes are transient. Putting persistent credentials on a throwaway VM is a liability. Agent forwarding means your keys never leave your laptop — the box just asks your local agent to sign on its behalf. Downside: mosh doesn't support agent forwarding, so git operations need a plain SSH connection.
-
-### Why not Terraform / Docker?
-
-**Terraform**: overkill for single-VM lifecycle. `hcloud` CLI does create/destroy in one command. If this grows to manage networking, firewalls, or multi-VM setups, Terraform starts to make sense.
-
-**Docker**: wrong abstraction. Dev boxes need persistent tmux sessions, SSH access, and full OS tooling. Containers are for isolated processes. Docker *inside* the box (for running services) is fine.
+| Decision | Over | Rationale |
+|---|---|---|
+| Hetzner | AWS, DO | Hillsboro (`hil1`) is ~15-30ms from SF. Comparable to AWS us-west-2 at ~1/3 the price. `cx22` at $4.35/mo is hard to beat for disposable boxes. |
+| tmux | zellij | Termius has native tmux integration. zellij has no mobile client support. Consistent sessions across devices is the whole point. |
+| `dev` user | root | Claude Code and npm shouldn't run as root. `dev` has passwordless sudo for package management but runs tools in userspace. |
+| SSH agent forwarding | deploy keys | Boxes are transient — persistent credentials on a throwaway VM is a liability. Keys never leave your laptop. Downside: mosh doesn't support agent forwarding. |
+| hcloud CLI | Terraform | Overkill for single-VM lifecycle. If this grows to multi-VM setups with networking/firewalls, revisit. |
+| Bare VM | Docker | Dev boxes need persistent tmux sessions, SSH access, and full OS tooling. Docker *inside* the box is fine. |
 
 ### Future work
 
