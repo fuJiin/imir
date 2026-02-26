@@ -90,12 +90,32 @@ imir-destroy experiment     # done with this one
 
 ### Connecting from your phone
 
-Use [Termius](https://termius.com/) (or any SSH client):
+Each device gets its own SSH key. Imir passes all `imir-*` keys from Hetzner to new boxes automatically.
+
+**One-time setup:**
+
+1. In Termius: **Keychain** → **+** → **Key** → **Generate** a new key
+2. Copy the **public** key (just the `ssh-ed25519 AAAA...` line, skip any comments)
+3. From your laptop, upload it to Hetzner:
+   ```bash
+   # Save the public key to a file, then:
+   hcloud ssh-key create --name imir-phone --public-key-from-file phone.pub
+   ```
+4. New boxes will include the key automatically. For existing boxes, add it manually:
+   ```bash
+   # From laptop:
+   imir-connect myproject
+   # On the box:
+   echo "ssh-ed25519 AAAA..." >> ~/.ssh/authorized_keys
+   ```
+
+**Per-box setup in Termius:**
 
 1. Get the IP: `imir-list` from your laptop
-2. In Termius: add host with IP, user `dev`, your SSH key
-3. Enable SSH agent forwarding in the host settings (for git)
-4. Connect — tmux picks up the same session you left on your laptop
+2. In Termius: **Hosts** → **+** → set **Hostname** to the IP, **Username** to `dev`
+3. Under **Key**, select the key you generated above (no password)
+4. Enable **SSH agent forwarding** in host settings (for git)
+5. Connect — run `tmux attach` to pick up the same session from your laptop
 
 ### Git authentication
 
@@ -142,6 +162,7 @@ Boxes are billed hourly. A `cpx21` running for a workday costs ~$0.05.
 | Hetzner | AWS, DO | Hillsboro (`hil`) is ~15-30ms from SF. Comparable to AWS us-west-2 at ~1/3 the price. `cx23` at $4.35/mo is hard to beat for disposable boxes. |
 | tmux | zellij | Termius has native tmux integration. zellij has no mobile client support. Consistent sessions across devices is the whole point. |
 | `dev` user | root | Claude Code and npm shouldn't run as root. `dev` has passwordless sudo for package management but runs tools in userspace. |
+| One key per device | Shared key | Each device (laptop, phone) gets its own SSH key uploaded to Hetzner as `imir-*`. Revoke one without affecting others. No private keys copied between devices. |
 | SSH agent forwarding | deploy keys | Boxes are transient — persistent credentials on a throwaway VM is a liability. Keys never leave your laptop. Downside: mosh doesn't support agent forwarding. |
 | hcloud CLI | Terraform | Overkill for single-VM lifecycle. If this grows to multi-VM setups with networking/firewalls, revisit. |
 | Bare VM | Docker | Dev boxes need persistent tmux sessions, SSH access, and full OS tooling. Docker *inside* the box is fine. |
