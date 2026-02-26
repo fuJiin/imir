@@ -14,4 +14,4 @@ IP=$(hcloud server ip "imir-$NAME" 2>/dev/null) || {
     exit 1
 }
 
-exec ssh -A -i "$SSH_KEY_PATH" -t dev@"$IP" 'tmux attach || tmux'
+exec ssh -A -i "$SSH_KEY_PATH" -t dev@"$IP" 'TERM=xterm-256color tmux attach || TERM=xterm-256color tmux'
