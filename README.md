@@ -31,8 +31,8 @@ fish_add_path ~/Code/projects/imir/bin
 # 4. Create a dev box (~2-3 min)
 imir-create myproject
 
-# 5. Connect (with a tmux session)
-imir-connect myproject main
+# 5. Connect (drops into tmux)
+imir-connect myproject
 ```
 
 ## Commands
@@ -40,7 +40,7 @@ imir-connect myproject main
 | Command | Description |
 |---|---|
 | `imir-create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
-| `imir-connect <name> [session]` | SSH into a box with agent forwarding. With a session name, attaches to (or creates) that tmux session. |
+| `imir-connect <name> [session]` | SSH into a box with agent forwarding and attach to a tmux session (default: `default`). |
 | `imir-list` | Show all running imir-managed dev boxes. |
 | `imir-destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
 
