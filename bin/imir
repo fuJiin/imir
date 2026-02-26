@@ -38,6 +38,7 @@ Usage: imir <command> [args]
 
 Commands:
   init                       Create config file at ~/.config/imir/config.env
+  uninstall                  Remove imir and all its files
   create   <name> [type]     Create and bootstrap a new dev box
   connect  <name> [session]  SSH into a box and attach to a tmux session
   ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
@@ -78,6 +79,50 @@ TMPL
     chmod 600 "$IMIR_CONFIG"
     echo "Created $IMIR_CONFIG"
     echo "Edit it and set at least HCLOUD_TOKEN."
+}
+
+cmd::uninstall() {
+    echo "This will remove imir from your system:"
+    echo "  - $IMIR_BIN_DIR/imir"
+    echo "  - $IMIR_BIN_DIR/imir-bootstrap"
+
+    local fish_comp="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/imir.fish"
+    if [[ -f "$fish_comp" ]]; then
+        echo "  - $fish_comp"
+    fi
+
+    if [[ -d "$IMIR_CONFIG_DIR" ]]; then
+        echo "  - $IMIR_CONFIG_DIR/ (contains your config and API token)"
+    fi
+
+    # Check for running boxes
+    if [[ -f "$IMIR_CONFIG" ]]; then
+        source "$IMIR_CONFIG"
+        export HCLOUD_TOKEN
+        local boxes
+        boxes=$(hcloud server list -l managed-by=imir -o noheader -o columns=name 2>/dev/null | sed 's/^imir-//' || true)
+        if [[ -n "$boxes" ]]; then
+            echo ""
+            echo "Warning: you have running dev boxes (billed hourly):"
+            echo "$boxes" | sed 's/^/  - /'
+            echo "These will NOT be destroyed. Run 'imir destroy <name>' first, or"
+            echo "delete them manually at https://console.hetzner.cloud"
+        fi
+    fi
+
+    echo ""
+    read -rp "Proceed? [y/N] " confirm
+    if [[ "$confirm" != [yY] ]]; then
+        echo "Cancelled."
+        return
+    fi
+
+    rm -f "$fish_comp"
+    rm -rf "$IMIR_CONFIG_DIR"
+    rm -f "$IMIR_BIN_DIR/imir-bootstrap"
+    rm -f "$IMIR_BIN_DIR/imir"
+
+    echo "imir has been uninstalled."
 }
 
 cmd::create() {
@@ -228,7 +273,8 @@ command="${1:-help}"
 shift || true
 
 case "$command" in
-    init)     cmd::init "$@" ;;
+    init)      cmd::init "$@" ;;
+    uninstall) cmd::uninstall "$@" ;;
     help|-h|--help) imir::usage ;;
     create|connect|ssh|ip|destroy|list|sessions)
         imir::load_config

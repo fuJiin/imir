@@ -53,6 +53,7 @@ imir connect myproject
 | Command | Description |
 |---|---|
 | `imir init` | Create config file at `~/.config/imir/config.env`. |
+| `imir uninstall` | Remove imir, completions, and config from your system. |
 | `imir create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
 | `imir connect <name> [session]` | SSH into a box with agent forwarding and attach to a tmux session (default: `default`). |
 | `imir ssh <name> [cmd...]` | Plain SSH (no tmux). Runs a command if given, otherwise opens a shell. |
