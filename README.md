@@ -31,8 +31,8 @@ fish_add_path ~/Code/projects/imir/bin
 # 4. Create a dev box (~2-3 min)
 imir-create myproject
 
-# 5. Connect
-imir-connect myproject
+# 5. Connect (with a tmux session)
+imir-connect myproject main
 ```
 
 ## Commands
@@ -40,7 +40,7 @@ imir-connect myproject
 | Command | Description |
 |---|---|
 | `imir-create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
-| `imir-connect <name>` | SSH into a box with agent forwarding and auto-attach to tmux. |
+| `imir-connect <name> [session]` | SSH into a box with agent forwarding. With a session name, attaches to (or creates) that tmux session. |
 | `imir-list` | Show all running imir-managed dev boxes. |
 | `imir-destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
 
@@ -60,19 +60,24 @@ The bootstrap provisions a `dev` user with sudo and sets up:
 
 ### Single box, multiple features (worktrees)
 
-Most of the time, one box is enough. Use git worktrees + tmux windows for parallel work:
+Most of the time, one box is enough. Use named tmux sessions + git worktrees for parallel work:
 
 ```bash
-imir-connect work
-
+# start a session for each feature
+imir-connect work auth
 # on the box:
-git clone git@github.com:you/project.git && cd project
-git worktree add ../project-auth feature/auth
-git worktree add ../project-payments feature/payments
+git clone git@github.com:you/project.git ~/auth && cd ~/auth
+git checkout -b feature/auth
 
-# each in its own tmux window
-tmux new-window -n auth -c ../project-auth
-tmux new-window -n payments -c ../project-payments
+# from your laptop, start another session
+imir-connect work payments
+# on the box:
+git clone git@github.com:you/project.git ~/payments && cd ~/payments
+git checkout -b feature/payments
+
+# list sessions from a plain SSH connection
+imir-connect work
+tmux list-sessions
 ```
 
 ### Multiple boxes (isolation)
@@ -115,7 +120,7 @@ Each device gets its own SSH key. Imir passes all `imir-*` keys from Hetzner to 
 2. In Termius: **Hosts** → **+** → set **Hostname** to the IP, **Username** to `dev`
 3. Under **Key**, select the key you generated above (no password)
 4. Enable **SSH agent forwarding** in host settings (for git)
-5. Connect — run `tmux attach` to pick up the same session from your laptop
+5. Connect — run `tmux attach` (or `tmux new-session -As main`) to pick up a session from your laptop
 
 ### Git authentication
 
@@ -202,3 +207,7 @@ Boxes are billed hourly. A `cpx21` running for a workday costs ~$0.05.
 - **Tailscale**: stable DNS names (`mybox.tail1234.ts.net`) instead of IPs, survives VM recreation
 - **Additional AI tools**: codex, opencode, or other CLI agents added to bootstrap
 - **Snapshot/restore**: save a bootstrapped image to skip the ~2 min setup on new boxes
+
+### Useful references
+
+- **tmux**: [Getting Started](https://github.com/tmux/tmux/wiki/Getting-Started) · [Cheat Sheet](https://tmuxcheatsheet.com/)
