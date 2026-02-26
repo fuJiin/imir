@@ -45,6 +45,7 @@ Commands:
   ip       <name>            Print a box's IP address
   sessions <name>            List tmux sessions on a box
   list                       Show all running imir-managed dev boxes
+  rename   <old> <new>       Rename a dev box
   destroy  <name>            Destroy a dev box and clean up known_hosts
   help                       Show this help message
 
@@ -236,6 +237,17 @@ cmd::ip() {
     imir::server_ip "$name" || exit 1
 }
 
+cmd::rename() {
+    local old="${1:?Usage: imir rename <old-name> <new-name>}"
+    local new="${2:?Usage: imir rename <old-name> <new-name>}"
+
+    # Verify source exists
+    imir::server_ip "$old" >/dev/null || exit 1
+
+    hcloud server update "imir-$old" --name "imir-$new"
+    echo "Renamed '$old' to '$new'."
+}
+
 cmd::destroy() {
     local name="${1:?Usage: imir destroy <name>}"
 
@@ -276,7 +288,7 @@ case "$command" in
     init)      cmd::init "$@" ;;
     uninstall) cmd::uninstall "$@" ;;
     help|-h|--help) imir::usage ;;
-    create|connect|ssh|ip|destroy|list|sessions)
+    create|connect|ssh|ip|destroy|list|rename|sessions)
         imir::load_config
         "cmd::$command" "$@"
         ;;

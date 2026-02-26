@@ -60,6 +60,7 @@ imir connect myproject
 | `imir ip <name>` | Print a box's IP address. |
 | `imir sessions <name>` | List tmux sessions on a box. |
 | `imir list` | Show all running imir-managed dev boxes. |
+| `imir rename <old> <new>` | Rename a dev box. |
 | `imir destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
 | `imir help` | Show usage information. |
 
