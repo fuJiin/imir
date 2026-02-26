@@ -29,20 +29,22 @@ cp config.env.example config.env
 fish_add_path ~/Code/projects/imir/bin
 
 # 4. Create a dev box (~2-3 min)
-imir-create myproject
+imir create myproject
 
 # 5. Connect (drops into tmux)
-imir-connect myproject
+imir connect myproject
 ```
 
 ## Commands
 
 | Command | Description |
 |---|---|
-| `imir-create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
-| `imir-connect <name> [session]` | SSH into a box with agent forwarding and attach to a tmux session (default: `default`). |
-| `imir-list` | Show all running imir-managed dev boxes. |
-| `imir-destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
+| `imir create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
+| `imir connect <name> [session]` | SSH into a box with agent forwarding and attach to a tmux session (default: `default`). |
+| `imir sessions <name>` | List tmux sessions on a box. |
+| `imir list` | Show all running imir-managed dev boxes. |
+| `imir destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
+| `imir help` | Show usage information. |
 
 ## What gets installed
 
@@ -64,19 +66,19 @@ Most of the time, one box is enough. Use named tmux sessions + git worktrees for
 
 ```bash
 # start a session for each feature
-imir-connect work auth
+imir connect work auth
 # on the box:
 git clone git@github.com:you/project.git ~/auth && cd ~/auth
 git checkout -b feature/auth
 
 # from your laptop, start another session
-imir-connect work payments
+imir connect work payments
 # on the box:
 git clone git@github.com:you/project.git ~/payments && cd ~/payments
 git checkout -b feature/payments
 
 # list sessions from a plain SSH connection
-imir-connect work
+imir connect work
 tmux list-sessions
 ```
 
@@ -85,17 +87,17 @@ tmux list-sessions
 When you want full isolation — different repos, throwaway experiments, or dedicated resources:
 
 ```bash
-imir-create frontend
-imir-create backend cx32    # bigger box for heavy builds
-imir-create experiment
+imir create frontend
+imir create backend cx32    # bigger box for heavy builds
+imir create experiment
 
-imir-list                   # see all running boxes
-imir-destroy experiment     # done with this one
+imir list                   # see all running boxes
+imir destroy experiment     # done with this one
 ```
 
 ### Connecting from your phone
 
-Each device gets its own SSH key. Imir passes all `imir-*` keys from Hetzner to new boxes automatically.
+Each device gets its own SSH key. Imir passes all `imir-*` SSH keys from Hetzner to new boxes automatically.
 
 **One-time setup:**
 
@@ -109,14 +111,14 @@ Each device gets its own SSH key. Imir passes all `imir-*` keys from Hetzner to 
 4. New boxes will include the key automatically. For existing boxes, add it manually:
    ```bash
    # From laptop:
-   imir-connect myproject
+   imir connect myproject
    # On the box:
    echo "ssh-ed25519 AAAA..." >> ~/.ssh/authorized_keys
    ```
 
 **Per-box setup in Termius:**
 
-1. Get the IP: `imir-list` from your laptop
+1. Get the IP: `imir list` from your laptop
 2. In Termius: **Hosts** → **+** → set **Hostname** to the IP, **Username** to `dev`
 3. Under **Key**, select the key you generated above (no password)
 4. Enable **SSH agent forwarding** in host settings (for git)
@@ -124,7 +126,7 @@ Each device gets its own SSH key. Imir passes all `imir-*` keys from Hetzner to 
 
 ### Git authentication
 
-`imir-connect` uses SSH agent forwarding (`-A`), so git operations on the box use your local SSH key. No private keys on the box.
+`imir connect` uses SSH agent forwarding (`-A`), so git operations on the box use your local SSH key. No private keys on the box.
 
 Make sure your key is in the agent:
 
@@ -203,7 +205,7 @@ Boxes are billed hourly. A `cpx21` running for a workday costs ~$0.05.
 
 - **tmux config via chezmoi**: status bar, mouse support (phone), keybindings, session naming
 - **Worktree helper**: fish function to create a worktree + tmux window in one command
-- **mosh support**: `imir-connect --mosh` for mobile-resilient connections (no agent forwarding though)
+- **mosh support**: `imir connect --mosh` for mobile-resilient connections (no agent forwarding though)
 - **Tailscale**: stable DNS names (`mybox.tail1234.ts.net`) instead of IPs, survives VM recreation
 - **Additional AI tools**: codex, opencode, or other CLI agents added to bootstrap
 - **Snapshot/restore**: save a bootstrapped image to skip the ~2 min setup on new boxes

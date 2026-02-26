@@ -1,0 +1,178 @@
+#!/bin/bash
+set -euo pipefail
+
+IMIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+source "$IMIR_ROOT/config.env"
+export HCLOUD_TOKEN
+
+# ── Helpers ───────────────────────────────────────────────────────────
+
+imir::ssh_key() {
+    echo "${SSH_KEY_PATH/#\~/$HOME}"
+}
+
+imir::server_ip() {
+    local name="$1"
+    local ip
+    ip=$(hcloud server ip "imir-$name" 2>/dev/null) || {
+        echo "Error: dev box '$name' not found." >&2
+        echo "Run 'imir list' to see available boxes." >&2
+        exit 1
+    }
+    echo "$ip"
+}
+
+imir::usage() {
+    cat <<'EOF'
+Usage: imir <command> [args]
+
+Commands:
+  create  <name> [type]     Create and bootstrap a new dev box
+  connect <name> [session]  SSH into a box and attach to a tmux session
+  sessions <name>           List tmux sessions on a box
+  list                      Show all running imir-managed dev boxes
+  destroy <name>            Destroy a dev box and clean up known_hosts
+  help                      Show this help message
+
+EOF
+}
+
+# ── Commands ──────────────────────────────────────────────────────────
+
+cmd::create() {
+    local name="${1:?Usage: imir create <name> [server-type]}"
+    local server_type="${2:-$DEFAULT_SERVER_TYPE}"
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    echo "Creating dev box: $name ($server_type in $DEFAULT_LOCATION)..."
+
+    # Ensure at least one imir-* SSH key exists in Hetzner
+    local imir_keys
+    imir_keys=$(hcloud ssh-key list -o noheader -o columns=name | grep '^imir-' || true)
+    if [ -z "$imir_keys" ]; then
+        echo "Uploading SSH key to Hetzner..."
+        hcloud ssh-key create --name imir-laptop --public-key-from-file "${ssh_key}.pub"
+        imir_keys="imir-laptop"
+    fi
+
+    # Check if server already exists
+    if hcloud server describe "imir-$name" &>/dev/null; then
+        echo "Error: dev box '$name' already exists. Use 'imir destroy' first."
+        exit 1
+    fi
+
+    # Build --ssh-key flags for all imir-* keys
+    local ssh_key_flags=()
+    while IFS= read -r key; do
+        ssh_key_flags+=(--ssh-key "$key")
+    done <<< "$imir_keys"
+
+    # Create server
+    hcloud server create \
+        --name "imir-$name" \
+        --type "$server_type" \
+        --location "$DEFAULT_LOCATION" \
+        --image "$DEFAULT_IMAGE" \
+        "${ssh_key_flags[@]}" \
+        --label managed-by=imir
+
+    # Get IP
+    local ip
+    ip=$(hcloud server ip "imir-$name")
+    echo "Server IP: $ip"
+
+    # Wait for SSH to become available
+    echo "Waiting for SSH..."
+    for i in $(seq 1 30); do
+        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$ssh_key" root@"$ip" true 2>/dev/null; then
+            break
+        fi
+        if [ "$i" -eq 30 ]; then
+            echo "Error: SSH connection timed out."
+            exit 1
+        fi
+        sleep 2
+    done
+
+    # Upload and run bootstrap
+    echo "Bootstrapping..."
+    scp -i "$ssh_key" "$IMIR_ROOT/bin/imir-bootstrap" root@"$ip":/tmp/imir-bootstrap
+    ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$CHEZMOI_REPO'"
+
+    echo ""
+    echo "Dev box '$name' is ready!"
+    echo "  Connect:  imir connect $name"
+    echo "  IP:       $ip"
+    echo "  User:     dev"
+}
+
+cmd::connect() {
+    local name="${1:?Usage: imir connect <name> [session]}"
+    local session="${2:-default}"
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    local ssh_opts=(-A -i "$ssh_key")
+
+    # Devboxes don't have ghostty terminfo; fall back to xterm-256color.
+    # SSH sends the client's TERM to the remote, so setting it here is enough.
+    export TERM=xterm-256color
+
+    # Attach to (or create) the named tmux session
+    exec ssh "${ssh_opts[@]}" -t dev@"$ip" \
+        "tmux new-session -As '$session'"
+}
+
+cmd::destroy() {
+    local name="${1:?Usage: imir destroy <name>}"
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    echo "Destroying dev box '$name' ($ip)..."
+    hcloud server delete "imir-$name"
+
+    # Clean up known_hosts
+    ssh-keygen -R "$ip" 2>/dev/null || true
+
+    echo "Dev box '$name' destroyed."
+}
+
+cmd::list() {
+    hcloud server list -l managed-by=imir -o columns=name,ipv4,status,location
+}
+
+cmd::sessions() {
+    local name="${1:?Usage: imir sessions <name>}"
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    ssh -A -i "$ssh_key" dev@"$ip" "tmux list-sessions"
+}
+
+# ── Dispatch ──────────────────────────────────────────────────────────
+
+command="${1:-help}"
+shift || true
+
+case "$command" in
+    create)   cmd::create "$@" ;;
+    connect)  cmd::connect "$@" ;;
+    destroy)  cmd::destroy "$@" ;;
+    list)     cmd::list "$@" ;;
+    sessions) cmd::sessions "$@" ;;
+    help|-h|--help) imir::usage ;;
+    *)
+        echo "Error: unknown command '$command'" >&2
+        echo >&2
+        imir::usage >&2
+        exit 1
+        ;;
+esac
