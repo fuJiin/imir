@@ -64,14 +64,16 @@ cat > /tmp/imir-user-setup.sh <<EOF
 set -uo pipefail
 cd "\$HOME"
 
-# Install chezmoi and apply dotfiles
-# Allow failure: run_once scripts may have issues on first run,
-# but the dotfiles themselves will still be applied.
-echo "Applying dotfiles via chezmoi..."
-sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO" || {
-    echo "Warning: chezmoi apply had errors (dotfiles are likely still applied)."
-    echo "Run 'chezmoi apply' manually to retry."
-}
+# Install chezmoi and apply dotfiles (if configured)
+if [ -n "$CHEZMOI_REPO" ]; then
+    echo "Applying dotfiles via chezmoi ($CHEZMOI_REPO)..."
+    sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO" || {
+        echo "Warning: chezmoi apply had errors (dotfiles are likely still applied)."
+        echo "Run 'chezmoi apply' manually to retry."
+    }
+else
+    echo "Skipping dotfiles (CHEZMOI_REPO not set)."
+fi
 
 # Install Claude Code (native installer, no Node.js required)
 echo "Installing Claude Code..."
