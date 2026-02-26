@@ -1,6 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
+IMIR_VERSION="dev"
 IMIR_BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMIR_CONFIG_DIR="${IMIR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/imir}"
 IMIR_CONFIG="$IMIR_CONFIG_DIR/config.env"
@@ -47,6 +48,7 @@ Commands:
   list                       Show all running imir-managed dev boxes
   rename   <old> <new>       Rename a dev box
   destroy  <name>            Destroy a dev box and clean up known_hosts
+  upgrade                    Upgrade imir to the latest version
   help                       Show this help message
 
 EOF
@@ -124,6 +126,16 @@ cmd::uninstall() {
     rm -f "$IMIR_BIN_DIR/imir"
 
     echo "imir has been uninstalled."
+}
+
+cmd::upgrade() {
+    echo "Upgrading imir (current: $IMIR_VERSION)..."
+    local installer
+    installer=$(curl -fsSL "https://raw.githubusercontent.com/fuJiin/imir/main/install.sh") || {
+        echo "Error: failed to download installer." >&2
+        exit 1
+    }
+    PREFIX="$(dirname "$IMIR_BIN_DIR")" exec bash -c "$installer"
 }
 
 cmd::create() {
@@ -287,6 +299,8 @@ shift || true
 case "$command" in
     init)      cmd::init "$@" ;;
     uninstall) cmd::uninstall "$@" ;;
+    upgrade)   cmd::upgrade "$@" ;;
+    -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
     create|connect|ssh|ip|destroy|list|rename|sessions)
         imir::load_config

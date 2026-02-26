@@ -62,6 +62,7 @@ imir connect myproject
 | `imir list` | Show all running imir-managed dev boxes. |
 | `imir rename <old> <new>` | Rename a dev box. |
 | `imir destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
+| `imir upgrade` | Upgrade imir to the latest version. |
 | `imir help` | Show usage information. |
 
 ## What gets installed
