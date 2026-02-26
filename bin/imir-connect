@@ -17,10 +17,14 @@ IP=$(hcloud server ip "imir-$NAME" 2>/dev/null) || {
 
 SSH_OPTS=(-A -i "$SSH_KEY_PATH")
 
+# Devboxes don't have ghostty terminfo; fall back to xterm-256color.
+# SSH sends the client's TERM to the remote, so setting it here is enough.
+export TERM=xterm-256color
+
 if [ -n "$SESSION" ]; then
     # Attach to (or create) the named tmux session
     exec ssh "${SSH_OPTS[@]}" -t dev@"$IP" \
-        "TERM=xterm-256color tmux new-session -As '$SESSION'"
+        "tmux new-session -As '$SESSION'"
 else
     # Plain SSH
     exec ssh "${SSH_OPTS[@]}" dev@"$IP"
