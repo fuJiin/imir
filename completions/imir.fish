@@ -10,11 +10,11 @@ function __imir_boxes
 end
 
 # Subcommands (only when no subcommand yet)
-complete -c imir -n "not __fish_seen_subcommand_from init uninstall create connect ssh ip sessions list destroy help" \
-    -a "init uninstall create connect ssh ip sessions list destroy help"
+complete -c imir -n "not __fish_seen_subcommand_from init uninstall create connect ssh ip sessions list rename destroy help" \
+    -a "init uninstall create connect ssh ip sessions list rename destroy help"
 
 # Box name completions for commands that take <name>
-for cmd in connect ssh ip sessions destroy
+for cmd in connect ssh ip sessions rename destroy
     complete -c imir -n "__fish_seen_subcommand_from $cmd; and not __fish_seen_subcommand_from (__imir_boxes)" \
         -a "(__imir_boxes)"
 end
