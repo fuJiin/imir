@@ -118,7 +118,7 @@ ssh-add ~/.ssh/id_rsa  # add if needed
 | `SSH_KEY_PATH` | `~/.ssh/id_rsa` | Path to your SSH private key |
 | `CHEZMOI_REPO` | `fuJiin/dotfiles` | GitHub shorthand for your dotfiles |
 | `DEFAULT_SERVER_TYPE` | `cx23` | Hetzner server type (2 vCPU, 4GB RAM) |
-| `DEFAULT_LOCATION` | `hil1` | Hetzner datacenter (Hillsboro, OR) |
+| `DEFAULT_LOCATION` | `hil` | Hetzner datacenter (Hillsboro, OR) |
 | `DEFAULT_IMAGE` | `ubuntu-24.04` | Base OS image |
 
 ### Server types
@@ -139,7 +139,7 @@ Boxes are billed hourly. A `cx23` running for a workday costs ~$0.02.
 
 | Decision | Over | Rationale |
 |---|---|---|
-| Hetzner | AWS, DO | Hillsboro (`hil1`) is ~15-30ms from SF. Comparable to AWS us-west-2 at ~1/3 the price. `cx23` at $4.35/mo is hard to beat for disposable boxes. |
+| Hetzner | AWS, DO | Hillsboro (`hil`) is ~15-30ms from SF. Comparable to AWS us-west-2 at ~1/3 the price. `cx23` at $4.35/mo is hard to beat for disposable boxes. |
 | tmux | zellij | Termius has native tmux integration. zellij has no mobile client support. Consistent sessions across devices is the whole point. |
 | `dev` user | root | Claude Code and npm shouldn't run as root. `dev` has passwordless sudo for package management but runs tools in userspace. |
 | SSH agent forwarding | deploy keys | Boxes are transient — persistent credentials on a throwaway VM is a liability. Keys never leave your laptop. Downside: mosh doesn't support agent forwarding. |
