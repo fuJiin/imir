@@ -52,8 +52,8 @@ The bootstrap provisions a `dev` user with sudo and sets up:
 - **Editor**: emacs-nox + Doom Emacs
 - **Multiplexer**: tmux
 - **Remote access**: mosh (for resilient mobile connections)
-- **Node.js**: via fnm (LTS)
-- **Claude Code**: latest, globally installed
+- **Claude Code**: latest, via native installer
+- **GitHub CLI**: gh (for creating PRs, issues, etc.)
 - **Tools**: git, ripgrep, fd, jq, curl, build-essential
 
 ## Usage patterns
@@ -127,6 +127,33 @@ Make sure your key is in the agent:
 ssh-add -l          # check
 ssh-add ~/.ssh/id_rsa  # add if needed
 ```
+
+### GitHub CLI (creating PRs)
+
+SSH agent forwarding handles `git push`, but `gh` needs its own auth to talk to the GitHub API.
+
+**Per-box setup** (run once after connecting):
+
+```bash
+gh auth login
+```
+
+Choose **GitHub.com** → **SSH** → select your forwarded key → **Login with a web browser** (or paste a token).
+
+**Tips:**
+- Pick **SSH** as the git protocol — this uses your forwarded key for pushes, so `gh pr create` just works.
+- If browser auth isn't practical (e.g. from a phone), create a [personal access token](https://github.com/settings/tokens) with `repo` scope and paste it when prompted.
+- Auth state lives in `~/.config/gh/` on the box. It's gone when the box is destroyed — no persistent credentials on throwaway VMs.
+
+**Adding your SSH key to GitHub** (one-time, per device):
+
+If you generated a new SSH key for a device (e.g. phone), GitHub also needs to know about it for `git push` to work without agent forwarding:
+
+1. Copy the public key:
+   ```bash
+   cat ~/.ssh/id_ed25519.pub
+   ```
+2. Add it at [github.com/settings/ssh/new](https://github.com/settings/ssh/new) (or `gh ssh-key add ~/.ssh/id_ed25519.pub --title "imir-phone"` from an already-authed session).
 
 ## Configuration
 
