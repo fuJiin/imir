@@ -17,9 +17,20 @@ fi
 echo "Installing imir to $BIN_DIR..."
 mkdir -p "$BIN_DIR"
 
+# Get latest commit hash for version stamping
+COMMIT=$(curl -fsSL "https://api.github.com/repos/$REPO/commits/$BRANCH" \
+    | grep '"sha"' | head -1 | cut -d'"' -f4 | cut -c1-7) || true
+
 # Download scripts
 curl -fsSL "$BASE_URL/bin/imir" -o "$BIN_DIR/imir"
 curl -fsSL "$BASE_URL/bin/imir-bootstrap" -o "$BIN_DIR/imir-bootstrap"
+
+# Stamp version
+if [[ -n "${COMMIT:-}" ]]; then
+    sed -i.bak "s/^IMIR_VERSION=\"dev\"/IMIR_VERSION=\"$COMMIT\"/" "$BIN_DIR/imir"
+    rm -f "$BIN_DIR/imir.bak"
+fi
+
 chmod +x "$BIN_DIR/imir" "$BIN_DIR/imir-bootstrap"
 
 # Install fish completions if fish is installed
