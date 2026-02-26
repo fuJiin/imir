@@ -5,7 +5,8 @@ IMIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 source "$IMIR_ROOT/config.env"
 export HCLOUD_TOKEN
 
-NAME="${1:?Usage: imir-connect <name>}"
+NAME="${1:?Usage: imir-connect <name> [session]}"
+SESSION="${2:-}"
 SSH_KEY_PATH="${SSH_KEY_PATH/#\~/$HOME}"
 
 IP=$(hcloud server ip "imir-$NAME" 2>/dev/null) || {
@@ -14,4 +15,13 @@ IP=$(hcloud server ip "imir-$NAME" 2>/dev/null) || {
     exit 1
 }
 
-exec ssh -A -i "$SSH_KEY_PATH" -t dev@"$IP" 'TERM=xterm-256color tmux attach || TERM=xterm-256color tmux'
+SSH_OPTS=(-A -i "$SSH_KEY_PATH")
+
+if [ -n "$SESSION" ]; then
+    # Attach to (or create) the named tmux session
+    exec ssh "${SSH_OPTS[@]}" -t dev@"$IP" \
+        "TERM=xterm-256color tmux new-session -As '$SESSION'"
+else
+    # Plain SSH
+    exec ssh "${SSH_OPTS[@]}" dev@"$IP"
+fi
