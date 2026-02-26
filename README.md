@@ -25,8 +25,9 @@ cd ~/Code/projects/imir
 cp config.env.example config.env
 # Edit config.env — at minimum, set HCLOUD_TOKEN
 
-# 3. Add bin/ to your PATH (fish example)
+# 3. Add bin/ to your PATH and completions (fish)
 fish_add_path ~/Code/projects/imir/bin
+ln -s ~/Code/projects/imir/completions/imir.fish ~/.config/fish/completions/imir.fish
 
 # 4. Create a dev box (~2-3 min)
 imir create myproject
@@ -41,6 +42,8 @@ imir connect myproject
 |---|---|
 | `imir create <name> [type]` | Create and bootstrap a new dev box. Optional server type (default: `cpx21`). |
 | `imir connect <name> [session]` | SSH into a box with agent forwarding and attach to a tmux session (default: `default`). |
+| `imir ssh <name> [cmd...]` | Plain SSH (no tmux). Runs a command if given, otherwise opens a shell. |
+| `imir ip <name>` | Print a box's IP address. |
 | `imir sessions <name>` | List tmux sessions on a box. |
 | `imir list` | Show all running imir-managed dev boxes. |
 | `imir destroy <name>` | Destroy a dev box and clean up SSH known_hosts. |
@@ -53,7 +56,6 @@ The bootstrap provisions a `dev` user with sudo and sets up:
 - **Shell**: fish (default shell) with your chezmoi-managed dotfiles
 - **Editor**: emacs-nox + Doom Emacs
 - **Multiplexer**: tmux
-- **Remote access**: mosh (for resilient mobile connections)
 - **Claude Code**: latest, via native installer
 - **GitHub CLI**: gh (for creating PRs, issues, etc.)
 - **Tools**: git, ripgrep, fd, jq, curl, build-essential
@@ -118,7 +120,7 @@ Each device gets its own SSH key. Imir passes all `imir-*` SSH keys from Hetzner
 
 **Per-box setup in Termius:**
 
-1. Get the IP: `imir list` from your laptop
+1. Get the IP: `imir ip myproject` from your laptop
 2. In Termius: **Hosts** → **+** → set **Hostname** to the IP, **Username** to `dev`
 3. Under **Key**, select the key you generated above (no password)
 4. Enable **SSH agent forwarding** in host settings (for git)
@@ -197,15 +199,13 @@ Boxes are billed hourly. A `cpx21` running for a workday costs ~$0.05.
 | tmux | zellij | Termius has native tmux integration. zellij has no mobile client support. Consistent sessions across devices is the whole point. |
 | `dev` user | root | Claude Code and npm shouldn't run as root. `dev` has passwordless sudo for package management but runs tools in userspace. |
 | One key per device | Shared key | Each device (laptop, phone) gets its own SSH key uploaded to Hetzner as `imir-*`. Revoke one without affecting others. No private keys copied between devices. |
-| SSH agent forwarding | deploy keys | Boxes are transient — persistent credentials on a throwaway VM is a liability. Keys never leave your laptop. Downside: mosh doesn't support agent forwarding. |
+| SSH agent forwarding | deploy keys | Boxes are transient — persistent credentials on a throwaway VM is a liability. Keys never leave your laptop. |
 | hcloud CLI | Terraform | Overkill for single-VM lifecycle. If this grows to multi-VM setups with networking/firewalls, revisit. |
 | Bare VM | Docker | Dev boxes need persistent tmux sessions, SSH access, and full OS tooling. Docker *inside* the box is fine. |
 
 ### Future work
 
-- **tmux config via chezmoi**: status bar, mouse support (phone), keybindings, session naming
 - **Worktree helper**: fish function to create a worktree + tmux window in one command
-- **mosh support**: `imir connect --mosh` for mobile-resilient connections (no agent forwarding though)
 - **Tailscale**: stable DNS names (`mybox.tail1234.ts.net`) instead of IPs, survives VM recreation
 - **Additional AI tools**: codex, opencode, or other CLI agents added to bootstrap
 - **Snapshot/restore**: save a bootstrapped image to skip the ~2 min setup on new boxes

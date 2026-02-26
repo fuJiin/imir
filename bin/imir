@@ -27,12 +27,14 @@ imir::usage() {
 Usage: imir <command> [args]
 
 Commands:
-  create  <name> [type]     Create and bootstrap a new dev box
-  connect <name> [session]  SSH into a box and attach to a tmux session
-  sessions <name>           List tmux sessions on a box
-  list                      Show all running imir-managed dev boxes
-  destroy <name>            Destroy a dev box and clean up known_hosts
-  help                      Show this help message
+  create   <name> [type]     Create and bootstrap a new dev box
+  connect  <name> [session]  SSH into a box and attach to a tmux session
+  ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
+  ip       <name>            Print a box's IP address
+  sessions <name>            List tmux sessions on a box
+  list                       Show all running imir-managed dev boxes
+  destroy  <name>            Destroy a dev box and clean up known_hosts
+  help                       Show this help message
 
 EOF
 }
@@ -127,6 +129,29 @@ cmd::connect() {
         "tmux new-session -As '$session'"
 }
 
+cmd::ssh() {
+    local name="${1:?Usage: imir ssh <name> [cmd...]}"
+    shift
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    export TERM=xterm-256color
+
+    if [ $# -gt 0 ]; then
+        exec ssh -A -i "$ssh_key" dev@"$ip" "$@"
+    else
+        exec ssh -A -i "$ssh_key" dev@"$ip"
+    fi
+}
+
+cmd::ip() {
+    local name="${1:?Usage: imir ip <name>}"
+    imir::server_ip "$name" || exit 1
+}
+
 cmd::destroy() {
     local name="${1:?Usage: imir destroy <name>}"
 
@@ -166,6 +191,8 @@ shift || true
 case "$command" in
     create)   cmd::create "$@" ;;
     connect)  cmd::connect "$@" ;;
+    ssh)      cmd::ssh "$@" ;;
+    ip)       cmd::ip "$@" ;;
     destroy)  cmd::destroy "$@" ;;
     list)     cmd::list "$@" ;;
     sessions) cmd::sessions "$@" ;;
