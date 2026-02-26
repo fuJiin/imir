@@ -1,11 +1,21 @@
 #!/bin/bash
 set -euo pipefail
 
-IMIR_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-source "$IMIR_ROOT/config.env"
-export HCLOUD_TOKEN
+IMIR_BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
+IMIR_CONFIG_DIR="${IMIR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/imir}"
+IMIR_CONFIG="$IMIR_CONFIG_DIR/config.env"
 
 # ── Helpers ───────────────────────────────────────────────────────────
+
+imir::load_config() {
+    if [[ ! -f "$IMIR_CONFIG" ]]; then
+        echo "Config not found: $IMIR_CONFIG" >&2
+        echo "Run 'imir init' to create it." >&2
+        exit 1
+    fi
+    source "$IMIR_CONFIG"
+    export HCLOUD_TOKEN
+}
 
 imir::ssh_key() {
     echo "${SSH_KEY_PATH/#\~/$HOME}"
@@ -27,6 +37,7 @@ imir::usage() {
 Usage: imir <command> [args]
 
 Commands:
+  init                       Create config file at ~/.config/imir/config.env
   create   <name> [type]     Create and bootstrap a new dev box
   connect  <name> [session]  SSH into a box and attach to a tmux session
   ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
@@ -40,6 +51,34 @@ EOF
 }
 
 # ── Commands ──────────────────────────────────────────────────────────
+
+cmd::init() {
+    if [[ -f "$IMIR_CONFIG" ]]; then
+        echo "Config already exists: $IMIR_CONFIG"
+        echo "Edit it directly, or remove it to start fresh."
+        return
+    fi
+    mkdir -p "$IMIR_CONFIG_DIR"
+    cat > "$IMIR_CONFIG" <<'TMPL'
+# Hetzner Cloud API token
+# Create at: https://console.hetzner.cloud → project → Security → API tokens
+HCLOUD_TOKEN=
+
+# SSH key (local path to private key; .pub will be auto-detected)
+SSH_KEY_PATH=~/.ssh/id_rsa
+
+# Chezmoi dotfiles repo (GitHub shorthand)
+CHEZMOI_REPO=fuJiin/dotfiles
+
+# Server defaults
+DEFAULT_SERVER_TYPE=cpx21
+DEFAULT_LOCATION=hil
+DEFAULT_IMAGE=ubuntu-24.04
+TMPL
+    chmod 600 "$IMIR_CONFIG"
+    echo "Created $IMIR_CONFIG"
+    echo "Edit it and set at least HCLOUD_TOKEN."
+}
 
 cmd::create() {
     local name="${1:?Usage: imir create <name> [server-type]}"
@@ -99,7 +138,7 @@ cmd::create() {
 
     # Upload and run bootstrap
     echo "Bootstrapping..."
-    scp -i "$ssh_key" "$IMIR_ROOT/bin/imir-bootstrap" root@"$ip":/tmp/imir-bootstrap
+    scp -i "$ssh_key" "$IMIR_BIN_DIR/imir-bootstrap" root@"$ip":/tmp/imir-bootstrap
     ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$CHEZMOI_REPO'"
 
     echo ""
@@ -189,14 +228,12 @@ command="${1:-help}"
 shift || true
 
 case "$command" in
-    create)   cmd::create "$@" ;;
-    connect)  cmd::connect "$@" ;;
-    ssh)      cmd::ssh "$@" ;;
-    ip)       cmd::ip "$@" ;;
-    destroy)  cmd::destroy "$@" ;;
-    list)     cmd::list "$@" ;;
-    sessions) cmd::sessions "$@" ;;
+    init)     cmd::init "$@" ;;
     help|-h|--help) imir::usage ;;
+    create|connect|ssh|ip|destroy|list|sessions)
+        imir::load_config
+        "cmd::$command" "$@"
+        ;;
     *)
         echo "Error: unknown command '$command'" >&2
         echo >&2
