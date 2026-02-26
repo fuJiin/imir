@@ -28,7 +28,6 @@ apt-get install -y \
     emacs-nox \
     fish \
     tmux \
-    mosh \
     curl \
     jq \
     ripgrep \
