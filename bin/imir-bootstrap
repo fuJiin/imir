@@ -65,23 +65,9 @@ sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO" || {
     echo "Run 'chezmoi apply' manually to retry."
 }
 
-# Install fnm
-echo "Installing fnm..."
-curl -fsSL https://fnm.vercel.app/install | bash -s -- --skip-shell
-
-# Source fnm for this script
-export FNM_PATH="\$HOME/.local/share/fnm"
-export PATH="\$FNM_PATH:\$PATH"
-eval "\$(fnm env)"
-
-# Install Node.js LTS
-echo "Installing Node.js LTS..."
-fnm install --lts
-fnm default lts-latest
-
-# Install Claude Code
+# Install Claude Code (native installer, no Node.js required)
 echo "Installing Claude Code..."
-npm install -g @anthropic-ai/claude-code
+curl -fsSL https://claude.ai/install.sh | sh
 
 echo "Done!"
 EOF
