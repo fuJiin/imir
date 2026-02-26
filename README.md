@@ -56,6 +56,7 @@ imir connect myproject
 | `imir ssh <name> [cmd...]` | Plain SSH, no tmux. Runs a command if given. |
 | `imir ip <name>` | Print a box's IP address. |
 | `imir sessions <name>` | List tmux sessions on a box. |
+| `imir kill-session <name> <session>` | Kill a tmux session on a box. |
 | `imir list` | Show all running dev boxes. |
 | `imir rename <old> <new>` | Rename a dev box. |
 | `imir destroy <name>` | Destroy a dev box and clean up known_hosts. |

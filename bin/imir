@@ -45,6 +45,7 @@ Commands:
   ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
   ip       <name>            Print a box's IP address
   sessions <name>            List tmux sessions on a box
+  kill-session <name> <ses>  Kill a tmux session on a box
   list                       Show all running imir-managed dev boxes
   rename   <old> <new>       Rename a dev box
   destroy  <name>            Destroy a dev box and clean up known_hosts
@@ -291,6 +292,19 @@ cmd::sessions() {
     ssh -A -i "$ssh_key" dev@"$ip" "tmux list-sessions"
 }
 
+cmd::kill-session() {
+    local name="${1:?Usage: imir kill-session <name> <session>}"
+    local session="${2:?Usage: imir kill-session <name> <session>}"
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    ssh -A -i "$ssh_key" dev@"$ip" "tmux kill-session -t '$session'"
+    echo "Killed session '$session' on '$name'."
+}
+
 # ── Dispatch ──────────────────────────────────────────────────────────
 
 command="${1:-help}"
@@ -302,7 +316,7 @@ case "$command" in
     upgrade)   cmd::upgrade "$@" ;;
     -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
-    create|connect|ssh|ip|destroy|list|rename|sessions)
+    create|connect|ssh|ip|destroy|list|rename|sessions|kill-session)
         imir::load_config
         "cmd::$command" "$@"
         ;;
