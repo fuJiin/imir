@@ -13,10 +13,12 @@ SSH_KEY_PATH="${SSH_KEY_PATH/#\~/$HOME}"
 
 echo "Creating dev box: $NAME ($SERVER_TYPE in $DEFAULT_LOCATION)..."
 
-# Ensure SSH key exists in Hetzner
-if ! hcloud ssh-key describe imir &>/dev/null; then
+# Ensure at least one imir-* SSH key exists in Hetzner
+IMIR_KEYS=$(hcloud ssh-key list -o noheader -o columns=name | grep '^imir-' || true)
+if [ -z "$IMIR_KEYS" ]; then
     echo "Uploading SSH key to Hetzner..."
-    hcloud ssh-key create --name imir --public-key-from-file "${SSH_KEY_PATH}.pub"
+    hcloud ssh-key create --name imir-laptop --public-key-from-file "${SSH_KEY_PATH}.pub"
+    IMIR_KEYS="imir-laptop"
 fi
 
 # Check if server already exists
@@ -25,13 +27,19 @@ if hcloud server describe "imir-$NAME" &>/dev/null; then
     exit 1
 fi
 
+# Build --ssh-key flags for all imir-* keys
+SSH_KEY_FLAGS=()
+while IFS= read -r key; do
+    SSH_KEY_FLAGS+=(--ssh-key "$key")
+done <<< "$IMIR_KEYS"
+
 # Create server
 hcloud server create \
     --name "imir-$NAME" \
     --type "$SERVER_TYPE" \
     --location "$DEFAULT_LOCATION" \
     --image "$DEFAULT_IMAGE" \
-    --ssh-key imir \
+    "${SSH_KEY_FLAGS[@]}" \
     --label managed-by=imir
 
 # Get IP
