@@ -21,6 +21,7 @@ echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubc
     > /etc/apt/sources.list.d/github-cli.list
 
 echo "Installing system packages..."
+export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
     git \
