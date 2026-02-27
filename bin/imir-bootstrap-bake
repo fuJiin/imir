@@ -55,4 +55,11 @@ if ! id "$DEV_USER" &>/dev/null; then
     chmod 440 "/etc/sudoers.d/$DEV_USER"
 fi
 
+# ── User bake hook ─────────────────────────────────────────────────
+
+if [[ -f /tmp/imir-bake-hook ]]; then
+    echo "Running bake hook..."
+    bash /tmp/imir-bake-hook
+fi
+
 echo "=== Bake complete ==="
