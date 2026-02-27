@@ -16,7 +16,16 @@ fi
 
 # ── Per-box setup (as root) ────────────────────────────────────────
 
-# Ensure home dir ownership is correct (snapshot boot can reset it)
+# Ensure dev user exists (cloud-init may wipe non-default users on snapshot boot)
+if ! id "$DEV_USER" &>/dev/null; then
+    echo "Creating user: $DEV_USER"
+    useradd -m -s "$(command -v fish || echo /bin/bash)" -G sudo "$DEV_USER"
+    echo "$DEV_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$DEV_USER"
+    chmod 440 "/etc/sudoers.d/$DEV_USER"
+fi
+
+# Ensure home dir exists with correct ownership (snapshot boot can reset this)
+mkdir -p "/home/$DEV_USER"
 chown "$DEV_USER:$DEV_USER" "/home/$DEV_USER"
 
 # Copy SSH authorized_keys from root
