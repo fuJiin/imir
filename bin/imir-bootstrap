@@ -35,6 +35,7 @@ cd "\$HOME"
 # Install chezmoi and apply dotfiles (if configured)
 if [ -n "$CHEZMOI_REPO" ]; then
     echo "Applying dotfiles via chezmoi ($CHEZMOI_REPO)..."
+    mkdir -p "\$HOME/bin"
     sh -c "\$(curl -fsLS get.chezmoi.io)" -- init --apply "$CHEZMOI_REPO" || {
         echo "Warning: chezmoi apply had errors (dotfiles are likely still applied)."
         echo "Run 'chezmoi apply' manually to retry."
@@ -45,7 +46,7 @@ fi
 
 # Install Claude Code (native installer, no Node.js required)
 echo "Installing Claude Code..."
-curl -fsSL https://claude.ai/install.sh | sh
+curl -fsSL https://claude.ai/install.sh | bash
 
 echo "Done!"
 EOF
