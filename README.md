@@ -12,7 +12,7 @@ This is an intentionally opinionated setup. It solves specific problems I kept r
 
 - **Code on the go** — SSH + tmux from a phone (via Termius) with full agent forwarding. Closer to the metal and more customizable than the Claude mobile app.
 - **Right-size the machine** — local laptop chokes on ML training or large codebases. Spin up a beefier box for the job, destroy it when done.
-- **Consistent environment** — chezmoi dotfiles, same tools, same shell, every time. New box in ~2 minutes.
+- **Consistent environment** — chezmoi dotfiles, same tools, same shell, every time. New box in ~2 minutes (~30s with a baked snapshot).
 
 Take it or leave it. Or fork it and rebuild it with your own AI.
 
@@ -39,7 +39,7 @@ Installs `imir` to `~/.local/bin` (or `/usr/local/bin`), fish completions, and c
 # 1. Edit config — set HCLOUD_TOKEN and CHEZMOI_REPO at minimum
 ${EDITOR:-vi} ~/.config/imir/config.env
 
-# 2. Create a dev box (~2-3 min)
+# 2. Create a dev box (~2 min, or ~30s with 'imir bake')
 imir create myproject
 
 # 3. Connect (drops into tmux)
@@ -52,6 +52,7 @@ imir connect myproject
 |---|---|
 | `imir init` | Create config file at `~/.config/imir/config.env`. |
 | `imir create <name> [type]` | Create and bootstrap a new dev box. |
+| `imir bake [--force]` | Bake a snapshot for faster box creation. |
 | `imir connect <name> [session]` | SSH + tmux session (default: `default`). |
 | `imir ssh <name> [cmd...]` | Plain SSH, no tmux. Runs a command if given. |
 | `imir ip <name>` | Print a box's IP address. |
@@ -89,6 +90,17 @@ imir connect myproject
 The `create` command provisions a `dev` user with sudo and installs:
 
 fish, emacs-nox + Doom Emacs, tmux, Claude Code, GitHub CLI, git, ripgrep, fd, jq, curl, build-essential — then applies your dotfiles via [chezmoi](https://www.chezmoi.io/). Your `CHEZMOI_REPO` should be a GitHub repo that `chezmoi init --apply` can consume (see [fuJiin/dotfiles](https://github.com/fuJiin/dotfiles) for an example).
+
+## Snapshots
+
+Bootstrap is split into two phases:
+
+1. **Bake** (system packages) — apt repos, package installs, lazygit, dev user creation. Slow (~90s) but identical across boxes.
+2. **Per-box** (user setup) — SSH keys, chezmoi dotfiles, Claude Code. Fast (~30s) and unique to each box.
+
+Run `imir bake` to snapshot the first phase into a Hetzner image. Subsequent `imir create` calls use that snapshot and skip straight to per-box setup.
+
+The snapshot is tagged with a hash of the bake script. If you update `imir-bootstrap-bake` (e.g. via `imir upgrade`), `create` will warn that the snapshot is stale. Run `imir bake` again to rebuild it.
 
 ## Further reading
 

@@ -10,11 +10,14 @@ function __imir_boxes
 end
 
 # Subcommands (only when no subcommand yet)
-complete -c imir -n "not __fish_seen_subcommand_from init uninstall upgrade create connect ssh ip sessions kill-session list rename destroy help" \
-    -a "init uninstall upgrade create connect ssh ip sessions kill-session list rename destroy help"
+complete -c imir -n "not __fish_seen_subcommand_from init uninstall upgrade create bake connect ssh ip sessions kill-session list rename destroy help" \
+    -a "init uninstall upgrade create bake connect ssh ip sessions kill-session list rename destroy help"
 
 # Box name completions for commands that take <name>
 for cmd in connect ssh ip sessions kill-session rename destroy
     complete -c imir -n "__fish_seen_subcommand_from $cmd; and not __fish_seen_subcommand_from (__imir_boxes)" \
         -a "(__imir_boxes)"
 end
+
+# Flags for bake
+complete -c imir -n "__fish_seen_subcommand_from bake" -l force -d "Rebuild snapshot even if hash matches"

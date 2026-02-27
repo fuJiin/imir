@@ -22,6 +22,14 @@ imir::ssh_key() {
     echo "${SSH_KEY_PATH/#\~/$HOME}"
 }
 
+imir::hash_file() {
+    if command -v sha256sum &>/dev/null; then
+        sha256sum "$1" | cut -c1-12
+    else
+        shasum -a 256 "$1" | cut -c1-12
+    fi
+}
+
 imir::server_ip() {
     local name="$1"
     local ip
@@ -41,6 +49,7 @@ Commands:
   init                       Create config file at ~/.config/imir/config.env
   uninstall                  Remove imir and all its files
   create   <name> [type]     Create and bootstrap a new dev box
+  bake     [--force]         Bake a snapshot for faster box creation
   connect  <name> [session]  SSH into a box and attach to a tmux session
   ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
   ip       <name>            Print a box's IP address
@@ -89,6 +98,7 @@ cmd::uninstall() {
     echo "This will remove imir from your system:"
     echo "  - $IMIR_BIN_DIR/imir"
     echo "  - $IMIR_BIN_DIR/imir-bootstrap"
+    echo "  - $IMIR_BIN_DIR/imir-bootstrap-bake"
 
     local fish_comp="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/imir.fish"
     if [[ -f "$fish_comp" ]]; then
@@ -99,7 +109,7 @@ cmd::uninstall() {
         echo "  - $IMIR_CONFIG_DIR/ (contains your config and API token)"
     fi
 
-    # Check for running boxes
+    # Check for running boxes and snapshots
     if [[ -f "$IMIR_CONFIG" ]]; then
         source "$IMIR_CONFIG"
         export HCLOUD_TOKEN
@@ -112,6 +122,14 @@ cmd::uninstall() {
             echo "These will NOT be destroyed. Run 'imir destroy <name>' first, or"
             echo "delete them manually at https://console.hetzner.cloud"
         fi
+
+        local snapshots
+        snapshots=$(hcloud image list --type snapshot -l managed-by=imir -o noheader -o columns=id 2>/dev/null || true)
+        if [[ -n "$snapshots" ]]; then
+            echo ""
+            echo "Warning: you have imir snapshots in Hetzner."
+            echo "These will NOT be deleted. Remove them manually at https://console.hetzner.cloud"
+        fi
     fi
 
     echo ""
@@ -123,6 +141,7 @@ cmd::uninstall() {
 
     rm -f "$fish_comp"
     rm -rf "$IMIR_CONFIG_DIR"
+    rm -f "$IMIR_BIN_DIR/imir-bootstrap-bake"
     rm -f "$IMIR_BIN_DIR/imir-bootstrap"
     rm -f "$IMIR_BIN_DIR/imir"
 
@@ -139,6 +158,135 @@ cmd::upgrade() {
     PREFIX="$(dirname "$IMIR_BIN_DIR")" exec bash -c "$installer"
 }
 
+cmd::bake() {
+    local force=false
+    if [[ "${1:-}" == "--force" ]]; then
+        force=true
+    fi
+
+    local bake_script="$IMIR_BIN_DIR/imir-bootstrap-bake"
+    if [[ ! -f "$bake_script" ]]; then
+        echo "Error: $bake_script not found." >&2
+        exit 1
+    fi
+
+    local bake_hash
+    bake_hash=$(imir::hash_file "$bake_script")
+    echo "Bake script hash: $bake_hash"
+
+    # Check if a snapshot with this hash already exists
+    local existing_snapshot
+    existing_snapshot=$(hcloud image list --type snapshot -l managed-by=imir -l "bake-hash=$bake_hash" -o noheader -o columns=id 2>/dev/null | head -1 || true)
+    if [[ -n "$existing_snapshot" && "$force" != "true" ]]; then
+        echo "Snapshot already exists (id: $existing_snapshot) with matching hash."
+        echo "Use 'imir bake --force' to rebuild."
+        return
+    fi
+
+    # Check for leftover temp server
+    if hcloud server describe imir-bake-temp &>/dev/null; then
+        echo "Warning: leftover temp server 'imir-bake-temp' found."
+        read -rp "Delete it and continue? [y/N] " confirm
+        if [[ "$confirm" != [yY] ]]; then
+            echo "Cancelled."
+            return
+        fi
+        hcloud server delete imir-bake-temp
+        echo "Deleted leftover temp server."
+    fi
+
+    # Ensure SSH keys exist
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+    local imir_keys
+    imir_keys=$(hcloud ssh-key list -o noheader -o columns=name | grep '^imir-' || true)
+    if [[ -z "$imir_keys" ]]; then
+        echo "Uploading SSH key to Hetzner..."
+        hcloud ssh-key create --name imir-laptop --public-key-from-file "${ssh_key}.pub"
+        imir_keys="imir-laptop"
+    fi
+
+    local ssh_key_flags=()
+    while read -r key; do
+        ssh_key_flags+=(--ssh-key "$key")
+    done <<< "$imir_keys"
+
+    # Create temp server
+    echo "Creating temp server for baking..."
+    hcloud server create \
+        --name imir-bake-temp \
+        --type "$DEFAULT_SERVER_TYPE" \
+        --location "$DEFAULT_LOCATION" \
+        --image "$DEFAULT_IMAGE" \
+        "${ssh_key_flags[@]}" \
+        --label managed-by=imir
+
+    local ip
+    ip=$(hcloud server ip imir-bake-temp)
+
+    # Wait for SSH
+    echo "Waiting for SSH..."
+    for i in $(seq 1 30); do
+        if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$ssh_key" root@"$ip" true 2>/dev/null; then
+            break
+        fi
+        if [[ "$i" -eq 30 ]]; then
+            echo "Error: SSH connection timed out." >&2
+            exit 1
+        fi
+        sleep 2
+    done
+
+    # Upload and run bake script
+    echo "Running bake script..."
+    scp -i "$ssh_key" "$bake_script" root@"$ip":/tmp/imir-bootstrap-bake
+    ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap-bake"
+
+    # Power off server before snapshotting
+    echo "Powering off server..."
+    hcloud server poweroff imir-bake-temp
+    # Wait for poweroff
+    for i in $(seq 1 30); do
+        local status
+        status=$(hcloud server describe imir-bake-temp -o format='{{.Status}}')
+        if [[ "$status" == "off" ]]; then
+            break
+        fi
+        if [[ "$i" -eq 30 ]]; then
+            echo "Error: server did not power off in time." >&2
+            exit 1
+        fi
+        sleep 2
+    done
+
+    # Create snapshot
+    echo "Creating snapshot..."
+    hcloud server create-image imir-bake-temp \
+        --type snapshot \
+        --description "imir baked image ($bake_hash)" \
+        --label managed-by=imir \
+        --label "bake-hash=$bake_hash"
+
+    # Delete temp server
+    echo "Deleting temp server..."
+    hcloud server delete imir-bake-temp
+    ssh-keygen -R "$ip" 2>/dev/null || true
+
+    # Delete old snapshots with different hashes
+    local old_snapshots
+    old_snapshots=$(hcloud image list --type snapshot -l managed-by=imir -o noheader -o columns=id,labels \
+        | grep -v "bake-hash=$bake_hash" \
+        | awk '{print $1}' || true)
+    if [[ -n "$old_snapshots" ]]; then
+        echo "Cleaning up old snapshots..."
+        while read -r snap_id; do
+            hcloud image delete "$snap_id"
+        done <<< "$old_snapshots"
+    fi
+
+    echo "Snapshot baked successfully."
+}
+
 cmd::create() {
     local name="${1:?Usage: imir create <name> [server-type]}"
     local server_type="${2:-$DEFAULT_SERVER_TYPE}"
@@ -146,6 +294,31 @@ cmd::create() {
     ssh_key=$(imir::ssh_key)
 
     echo "Creating dev box: $name ($server_type in $DEFAULT_LOCATION)..."
+
+    # Look for an imir snapshot
+    local snapshot_id=""
+    local baked="false"
+    local snapshot_line
+    snapshot_line=$(hcloud image list --type snapshot -l managed-by=imir -o noheader -o columns=id,labels 2>/dev/null | head -1 || true)
+    if [[ -n "$snapshot_line" ]]; then
+        snapshot_id=$(echo "$snapshot_line" | awk '{print $1}')
+
+        # Staleness check
+        local bake_script="$IMIR_BIN_DIR/imir-bootstrap-bake"
+        if [[ -f "$bake_script" ]]; then
+            local local_hash
+            local_hash=$(imir::hash_file "$bake_script")
+            if ! echo "$snapshot_line" | grep -q "bake-hash=$local_hash"; then
+                echo "Warning: snapshot may be stale (local bake script has changed)."
+                echo "Run 'imir bake' to rebuild the snapshot."
+            fi
+        fi
+
+        echo "Using snapshot (id: $snapshot_id)."
+        baked="true"
+    fi
+
+    local image="${snapshot_id:-$DEFAULT_IMAGE}"
 
     # Ensure at least one imir-* SSH key exists in Hetzner
     local imir_keys
@@ -173,7 +346,7 @@ cmd::create() {
         --name "imir-$name" \
         --type "$server_type" \
         --location "$DEFAULT_LOCATION" \
-        --image "$DEFAULT_IMAGE" \
+        --image "$image" \
         "${ssh_key_flags[@]}" \
         --label managed-by=imir
 
@@ -195,16 +368,21 @@ cmd::create() {
         sleep 2
     done
 
-    # Upload and run bootstrap
+    # Upload and run bootstrap (send both scripts for fallback path)
     echo "Bootstrapping..."
-    scp -i "$ssh_key" "$IMIR_BIN_DIR/imir-bootstrap" root@"$ip":/tmp/imir-bootstrap
-    ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$CHEZMOI_REPO'"
+    scp -i "$ssh_key" "$IMIR_BIN_DIR/imir-bootstrap" "$IMIR_BIN_DIR/imir-bootstrap-bake" root@"$ip":/tmp/
+    ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$CHEZMOI_REPO' '$baked'"
 
     echo ""
     echo "Dev box '$name' is ready!"
     echo "  Connect:  imir connect $name"
     echo "  IP:       $ip"
     echo "  User:     dev"
+
+    if [[ "$baked" != "true" ]]; then
+        echo ""
+        echo "Tip: run 'imir bake' to speed up future box creation."
+    fi
 }
 
 cmd::connect() {
@@ -339,7 +517,7 @@ case "$command" in
     upgrade)   cmd::upgrade "$@" ;;
     -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
-    create|connect|ssh|ip|destroy|list|rename|sessions|kill-session)
+    create|bake|connect|ssh|ip|destroy|list|rename|sessions|kill-session)
         imir::load_config
         "cmd::$command" "$@"
         ;;
