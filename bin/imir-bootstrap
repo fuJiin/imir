@@ -16,6 +16,9 @@ fi
 
 # ── Per-box setup (as root) ────────────────────────────────────────
 
+# Ensure home dir ownership is correct (snapshot boot can reset it)
+chown "$DEV_USER:$DEV_USER" "/home/$DEV_USER"
+
 # Copy SSH authorized_keys from root
 mkdir -p "/home/$DEV_USER/.ssh"
 cp /root/.ssh/authorized_keys "/home/$DEV_USER/.ssh/authorized_keys"
