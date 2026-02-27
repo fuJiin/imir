@@ -55,6 +55,11 @@ if ! id "$DEV_USER" &>/dev/null; then
     chmod 440 "/etc/sudoers.d/$DEV_USER"
 fi
 
+# ── Claude Code ────────────────────────────────────────────────────
+
+echo "Installing Claude Code..."
+sudo -u "$DEV_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+
 # ── User bake hook ─────────────────────────────────────────────────
 
 if [[ -f /tmp/imir-bake-hook ]]; then
