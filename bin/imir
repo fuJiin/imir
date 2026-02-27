@@ -24,9 +24,9 @@ imir::ssh_key() {
 
 imir::hash_file() {
     if command -v sha256sum &>/dev/null; then
-        sha256sum "$@" | cut -c1-12
+        cat "$@" | sha256sum | cut -c1-12
     else
-        shasum -a 256 "$@" | cut -c1-12
+        cat "$@" | shasum -a 256 | cut -c1-12
     fi
 }
 
