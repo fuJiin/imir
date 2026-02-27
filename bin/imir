@@ -248,6 +248,9 @@ cmd::bake() {
     local ip
     ip=$(hcloud server ip imir-bake-temp)
 
+    # Clean stale host key (same IP may be reused across servers)
+    ssh-keygen -R "$ip" 2>/dev/null || true
+
     # Wait for SSH
     echo "Waiting for SSH..."
     for i in $(seq 1 30); do
@@ -387,6 +390,9 @@ cmd::create() {
     local ip
     ip=$(hcloud server ip "imir-$name")
     echo "Server IP: $ip"
+
+    # Clean stale host key (same IP may be reused across servers)
+    ssh-keygen -R "$ip" 2>/dev/null || true
 
     # Wait for SSH to become available
     echo "Waiting for SSH..."
