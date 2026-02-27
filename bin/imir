@@ -271,8 +271,15 @@ cmd::destroy() {
 
     # Check for active tmux sessions
     local sessions
-    sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>/dev/null || true)
-    if [[ -n "$sessions" ]]; then
+    sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>/dev/null)
+    if [[ $? -ne 0 ]]; then
+        echo "Warning: could not SSH into '$name' (bad bootstrap or key issue)."
+        read -rp "Destroy anyway? [y/N] " confirm
+        if [[ "$confirm" != [yY] ]]; then
+            echo "Cancelled."
+            return
+        fi
+    elif [[ -n "$sessions" ]]; then
         echo "Warning: '$name' has active tmux sessions:"
         echo "$sessions" | sed 's/^/  - /'
         echo ""
