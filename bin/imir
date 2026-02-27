@@ -164,7 +164,7 @@ cmd::create() {
 
     # Build --ssh-key flags for all imir-* keys
     local ssh_key_flags=()
-    while IFS= read -r key; do
+    while read -r key; do
         ssh_key_flags+=(--ssh-key "$key")
     done <<< "$imir_keys"
 
