@@ -76,6 +76,7 @@ imir connect myproject
 | `DEFAULT_SERVER_TYPE` | `cpx21` | Hetzner server type (3 vCPU, 4GB RAM) |
 | `DEFAULT_LOCATION` | `hil` | Hetzner datacenter (Hillsboro, OR) |
 | `DEFAULT_IMAGE` | `ubuntu-24.04` | Base OS image |
+| `BAKE_HOOK` | *(optional)* | Local script to run during `imir bake` (after system packages) |
 
 ### Server types
 
@@ -100,7 +101,9 @@ Bootstrap is split into two phases:
 
 Run `imir bake` to snapshot the first phase into a Hetzner image. Subsequent `imir create` calls use that snapshot and skip straight to per-box setup.
 
-The snapshot is tagged with a hash of the bake script. If you update `imir-bootstrap-bake` (e.g. via `imir upgrade`), `create` will warn that the snapshot is stale. Run `imir bake` again to rebuild it.
+Set `BAKE_HOOK` to a local script path to run custom setup during bake (e.g. Doom Emacs, language runtimes). The hook runs as root after system packages are installed. Its hash is included in staleness detection, so changing the hook triggers a rebuild warning.
+
+The snapshot is tagged with a hash of the bake script (and hook). If you update either (e.g. via `imir upgrade`), `create` will warn that the snapshot is stale. Run `imir bake` again to rebuild it.
 
 ## Further reading
 

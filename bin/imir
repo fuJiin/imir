@@ -24,9 +24,21 @@ imir::ssh_key() {
 
 imir::hash_file() {
     if command -v sha256sum &>/dev/null; then
-        sha256sum "$1" | cut -c1-12
+        sha256sum "$@" | cut -c1-12
     else
-        shasum -a 256 "$1" | cut -c1-12
+        shasum -a 256 "$@" | cut -c1-12
+    fi
+}
+
+imir::bake_hook() {
+    local hook="${BAKE_HOOK:-}"
+    if [[ -n "$hook" ]]; then
+        hook="${hook/#\~/$HOME}"
+        if [[ -f "$hook" ]]; then
+            echo "$hook"
+            return
+        fi
+        echo "Warning: BAKE_HOOK=$BAKE_HOOK not found, ignoring." >&2
     fi
 }
 
@@ -88,6 +100,9 @@ CHEZMOI_REPO=
 DEFAULT_SERVER_TYPE=cpx21
 DEFAULT_LOCATION=hil
 DEFAULT_IMAGE=ubuntu-24.04
+
+# Optional script to run during 'imir bake' (after system packages)
+# BAKE_HOOK=~/.config/imir/bake-hook.sh
 TMPL
     chmod 600 "$IMIR_CONFIG"
     echo "Created $IMIR_CONFIG"
@@ -170,9 +185,18 @@ cmd::bake() {
         exit 1
     fi
 
+    local bake_hook
+    bake_hook=$(imir::bake_hook)
+
+    # Hash bake script (and hook if present) for staleness detection
     local bake_hash
-    bake_hash=$(imir::hash_file "$bake_script")
-    echo "Bake script hash: $bake_hash"
+    if [[ -n "$bake_hook" ]]; then
+        bake_hash=$(imir::hash_file "$bake_script" "$bake_hook")
+        echo "Bake script hash: $bake_hash (includes hook)"
+    else
+        bake_hash=$(imir::hash_file "$bake_script")
+        echo "Bake script hash: $bake_hash"
+    fi
 
     # Check if a snapshot with this hash already exists
     local existing_snapshot
@@ -240,6 +264,9 @@ cmd::bake() {
     # Upload and run bake script
     echo "Running bake script..."
     scp -i "$ssh_key" "$bake_script" root@"$ip":/tmp/imir-bootstrap-bake
+    if [[ -n "$bake_hook" ]]; then
+        scp -i "$ssh_key" "$bake_hook" root@"$ip":/tmp/imir-bake-hook
+    fi
     ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap-bake"
 
     # Power off server before snapshotting
@@ -306,8 +333,14 @@ cmd::create() {
         # Staleness check
         local bake_script="$IMIR_BIN_DIR/imir-bootstrap-bake"
         if [[ -f "$bake_script" ]]; then
+            local bake_hook
+            bake_hook=$(imir::bake_hook)
             local local_hash
-            local_hash=$(imir::hash_file "$bake_script")
+            if [[ -n "$bake_hook" ]]; then
+                local_hash=$(imir::hash_file "$bake_script" "$bake_hook")
+            else
+                local_hash=$(imir::hash_file "$bake_script")
+            fi
             if ! echo "$snapshot_line" | grep -q "bake-hash=$local_hash"; then
                 echo "Warning: snapshot may be stale (local bake script has changed)."
                 echo "Run 'imir bake' to rebuild the snapshot."
