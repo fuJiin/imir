@@ -55,6 +55,17 @@ if ! id "$DEV_USER" &>/dev/null; then
     chmod 440 "/etc/sudoers.d/$DEV_USER"
 fi
 
+# Tell cloud-init to treat dev as the default user so it preserves
+# the home directory (and everything baked into it) across snapshot boots.
+cat > /etc/cloud/cloud.cfg.d/99-imir.cfg <<CLOUD
+system_info:
+  default_user:
+    name: $DEV_USER
+    shell: $(command -v fish)
+    groups: [sudo]
+    sudo: ALL=(ALL) NOPASSWD:ALL
+CLOUD
+
 # ── Claude Code ────────────────────────────────────────────────────
 
 echo "Installing Claude Code..."
