@@ -25,32 +25,15 @@ apt-get update
 apt-get install -y \
     git \
     gh \
-    emacs-nox \
-    fish \
     tmux \
     curl \
-    jq \
-    ripgrep \
-    fd-find \
-    build-essential \
     unzip
-
-# fd-find installs as fdfind on Ubuntu; symlink to fd
-if command -v fdfind &>/dev/null && ! command -v fd &>/dev/null; then
-    ln -sf "$(command -v fdfind)" /usr/local/bin/fd
-fi
-
-# Install lazygit (not in Ubuntu repos)
-echo "Installing lazygit..."
-LAZYGIT_VERSION=$(curl -fsSL "https://api.github.com/repos/jesseduffield/lazygit/releases/latest" | jq -r '.tag_name' | sed 's/^v//')
-curl -fsSL "https://github.com/jesseduffield/lazygit/releases/download/v${LAZYGIT_VERSION}/lazygit_${LAZYGIT_VERSION}_Linux_x86_64.tar.gz" \
-    | tar xz -C /usr/local/bin lazygit
 
 # ── Dev user ───────────────────────────────────────────────────────
 
 if ! id "$DEV_USER" &>/dev/null; then
     echo "Creating user: $DEV_USER"
-    useradd -m -s "$(command -v fish)" -G sudo "$DEV_USER"
+    useradd -m -s /bin/bash -G sudo "$DEV_USER"
     echo "$DEV_USER ALL=(ALL) NOPASSWD:ALL" > "/etc/sudoers.d/$DEV_USER"
     chmod 440 "/etc/sudoers.d/$DEV_USER"
 fi
@@ -61,7 +44,7 @@ cat > /etc/cloud/cloud.cfg.d/99-imir.cfg <<CLOUD
 system_info:
   default_user:
     name: $DEV_USER
-    shell: $(command -v fish)
+    shell: /bin/bash
     groups: [sudo]
     sudo: ALL=(ALL) NOPASSWD:ALL
 CLOUD
