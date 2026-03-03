@@ -69,7 +69,7 @@ Commands:
   kill-session <name> <ses>  Kill a tmux session on a box
   list                       Show all running imir-managed dev boxes
   rename   <old> <new>       Rename a dev box
-  destroy  <name>            Destroy a dev box and clean up known_hosts
+  destroy  [-f] <name>       Destroy a dev box and clean up known_hosts
   upgrade                    Upgrade imir to the latest version
   help                       Show this help message
 
@@ -479,31 +479,39 @@ cmd::rename() {
 }
 
 cmd::destroy() {
-    local name="${1:?Usage: imir destroy <name>}"
+    local force=false
+    if [[ "${1:-}" == "--force" || "${1:-}" == "-f" ]]; then
+        force=true
+        shift
+    fi
+
+    local name="${1:?Usage: imir destroy [-f|--force] <name>}"
     local ssh_key
     ssh_key=$(imir::ssh_key)
 
     local ip
     ip=$(imir::server_ip "$name") || exit 1
 
-    # Check for active tmux sessions
-    local sessions
-    sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>/dev/null)
-    if [[ $? -ne 0 ]]; then
-        echo "Warning: could not SSH into '$name' (bad bootstrap or key issue)."
-        read -rp "Destroy anyway? [y/N] " confirm
-        if [[ "$confirm" != [yY] ]]; then
-            echo "Cancelled."
-            return
-        fi
-    elif [[ -n "$sessions" ]]; then
-        echo "Warning: '$name' has active tmux sessions:"
-        echo "$sessions" | sed 's/^/  - /'
-        echo ""
-        read -rp "Destroy anyway? [y/N] " confirm
-        if [[ "$confirm" != [yY] ]]; then
-            echo "Cancelled."
-            return
+    if [[ "$force" != true ]]; then
+        # Check for active tmux sessions
+        local sessions
+        sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>/dev/null)
+        if [[ $? -ne 0 ]]; then
+            echo "Warning: could not SSH into '$name' (bad bootstrap or key issue)."
+            read -rp "Destroy anyway? [y/N] " confirm
+            if [[ "$confirm" != [yY] ]]; then
+                echo "Cancelled."
+                return
+            fi
+        elif [[ -n "$sessions" ]]; then
+            echo "Warning: '$name' has active tmux sessions:"
+            echo "$sessions" | sed 's/^/  - /'
+            echo ""
+            read -rp "Destroy anyway? [y/N] " confirm
+            if [[ "$confirm" != [yY] ]]; then
+                echo "Cancelled."
+                return
+            fi
         fi
     fi
 
