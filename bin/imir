@@ -272,9 +272,9 @@ cmd::bake() {
     fi
     ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap-bake"
 
-    # Power off server before snapshotting
+    # Power off server before snapshotting (graceful shutdown to flush fs buffers)
     echo "Powering off server..."
-    hcloud server poweroff imir-bake-temp
+    ssh -i "$ssh_key" root@"$ip" "sync && shutdown -h now" 2>/dev/null || true
     # Wait for poweroff
     for i in $(seq 1 30); do
         local status
@@ -495,9 +495,10 @@ cmd::destroy() {
     if [[ "$force" != true ]]; then
         # Check for active tmux sessions
         local sessions
-        sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>/dev/null)
+        sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>&1)
         if [[ $? -ne 0 ]]; then
-            echo "Warning: could not SSH into '$name' (bad bootstrap or key issue)."
+            echo "Warning: could not SSH into '$name':"
+            echo "$sessions" | sed 's/^/  /'
             read -rp "Destroy anyway? [y/N] " confirm
             if [[ "$confirm" != [yY] ]]; then
                 echo "Cancelled."

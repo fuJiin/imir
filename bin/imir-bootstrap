@@ -68,6 +68,6 @@ echo "Done!"
 EOF
 
 chmod +x /tmp/imir-user-setup.sh
-sudo -u "$DEV_USER" bash /tmp/imir-user-setup.sh
+sudo -Hu "$DEV_USER" bash /tmp/imir-user-setup.sh
 
 echo "=== Imir Bootstrap complete ==="

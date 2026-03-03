@@ -52,7 +52,7 @@ CLOUD
 # ── Claude Code ────────────────────────────────────────────────────
 
 echo "Installing Claude Code..."
-sudo -u "$DEV_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
+sudo -Hu "$DEV_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
 
 # ── User bake hook ─────────────────────────────────────────────────
 
