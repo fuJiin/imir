@@ -95,3 +95,22 @@ gh ssh-key add ~/.ssh/id_ed25519.pub --title "imir-phone"
 ```
 
 Or add it at [github.com/settings/ssh/new](https://github.com/settings/ssh/new).
+
+## Hybrid tool installs
+
+Use this when a tool should exist everywhere your dotfiles apply, but you also want it baked into `imir` snapshots.
+
+1. Put the real installer in your chezmoi repo and make it idempotent.
+2. Keep shell/config wiring in chezmoi.
+3. Set `BAKE_USER_HOOK` to a local wrapper that invokes the same installer during `imir bake`.
+
+Example:
+
+```bash
+# ~/.config/imir/bake-user-hook.sh
+set -euo pipefail
+
+"$HOME/.local/bin/install-codex"
+```
+
+This keeps Codex owned by your dotfiles while still letting `imir bake` preinstall it into the `dev` user's home directory.

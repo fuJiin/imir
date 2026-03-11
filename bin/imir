@@ -30,16 +30,25 @@ imir::hash_file() {
     fi
 }
 
-imir::bake_hook() {
-    local hook="${BAKE_HOOK:-}"
-    if [[ -n "$hook" ]]; then
-        hook="${hook/#\~/$HOME}"
-        if [[ -f "$hook" ]]; then
-            echo "$hook"
+imir::optional_file() {
+    local label="$1"
+    local path="$2"
+    if [[ -n "$path" ]]; then
+        path="${path/#\~/$HOME}"
+        if [[ -f "$path" ]]; then
+            echo "$path"
             return
         fi
-        echo "Warning: BAKE_HOOK=$BAKE_HOOK not found, ignoring." >&2
+        echo "Warning: $label not found, ignoring." >&2
     fi
+}
+
+imir::bake_hook() {
+    imir::optional_file "BAKE_HOOK=${BAKE_HOOK:-}" "${BAKE_HOOK:-}"
+}
+
+imir::bake_user_hook() {
+    imir::optional_file "BAKE_USER_HOOK=${BAKE_USER_HOOK:-}" "${BAKE_USER_HOOK:-}"
 }
 
 imir::server_ip() {
@@ -103,6 +112,9 @@ DEFAULT_IMAGE=ubuntu-24.04
 
 # Optional script to run during 'imir bake' (after system packages)
 # BAKE_HOOK=~/.config/imir/bake-hook.sh
+
+# Optional script to run as 'dev' during 'imir bake' (for user-local tools)
+# BAKE_USER_HOOK=~/.config/imir/bake-user-hook.sh
 TMPL
     chmod 600 "$IMIR_CONFIG"
     echo "Created $IMIR_CONFIG"
@@ -187,16 +199,25 @@ cmd::bake() {
 
     local bake_hook
     bake_hook=$(imir::bake_hook)
+    local bake_user_hook
+    bake_user_hook=$(imir::bake_user_hook)
 
-    # Hash bake script (and hook if present) for staleness detection
+    # Hash bake script and optional hooks for staleness detection.
     local bake_hash
-    if [[ -n "$bake_hook" ]]; then
+    local hash_note=""
+    if [[ -n "$bake_hook" && -n "$bake_user_hook" ]]; then
+        bake_hash=$(imir::hash_file "$bake_script" "$bake_hook" "$bake_user_hook")
+        hash_note=" (includes root hook, user hook)"
+    elif [[ -n "$bake_hook" ]]; then
         bake_hash=$(imir::hash_file "$bake_script" "$bake_hook")
-        echo "Bake script hash: $bake_hash (includes hook)"
+        hash_note=" (includes root hook)"
+    elif [[ -n "$bake_user_hook" ]]; then
+        bake_hash=$(imir::hash_file "$bake_script" "$bake_user_hook")
+        hash_note=" (includes user hook)"
     else
         bake_hash=$(imir::hash_file "$bake_script")
-        echo "Bake script hash: $bake_hash"
     fi
+    echo "Bake script hash: $bake_hash$hash_note"
 
     # Check if a snapshot with this hash already exists
     local existing_snapshot
@@ -269,6 +290,9 @@ cmd::bake() {
     scp -i "$ssh_key" "$bake_script" root@"$ip":/tmp/imir-bootstrap-bake
     if [[ -n "$bake_hook" ]]; then
         scp -i "$ssh_key" "$bake_hook" root@"$ip":/tmp/imir-bake-hook
+    fi
+    if [[ -n "$bake_user_hook" ]]; then
+        scp -i "$ssh_key" "$bake_user_hook" root@"$ip":/tmp/imir-bake-user-hook
     fi
     ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap-bake"
 

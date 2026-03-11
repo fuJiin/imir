@@ -15,7 +15,7 @@
 
 - **Worktree helper**: fish function to create a worktree + tmux window in one command
 - **Tailscale**: stable DNS names instead of IPs, survives VM recreation
-- **Additional AI tools**: codex, opencode, or other CLI agents added to bootstrap
+- **Additional AI tools**: keep installers in chezmoi; optionally preinstall them during `imir bake` via `BAKE_USER_HOOK`
 - **Snapshot/restore**: save a bootstrapped image to skip the ~2 min setup
 
 ## References

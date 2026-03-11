@@ -76,7 +76,8 @@ imir connect myproject
 | `DEFAULT_SERVER_TYPE` | `cpx21` | Hetzner server type (3 vCPU, 4GB RAM) |
 | `DEFAULT_LOCATION` | `hil` | Hetzner datacenter (Hillsboro, OR) |
 | `DEFAULT_IMAGE` | `ubuntu-24.04` | Base OS image |
-| `BAKE_HOOK` | *(optional)* | Local script to run during `imir bake` (after system packages) |
+| `BAKE_HOOK` | *(optional)* | Local script to run as `root` during `imir bake` (after system packages) |
+| `BAKE_USER_HOOK` | *(optional)* | Local script to run as `dev` during `imir bake` for user-local tools |
 
 ### Server types
 
@@ -92,6 +93,8 @@ The `create` command provisions a `dev` user with sudo and installs:
 
 fish, emacs-nox + Doom Emacs, tmux, Claude Code, GitHub CLI, git, ripgrep, fd, jq, curl, build-essential — then applies your dotfiles via [chezmoi](https://www.chezmoi.io/). Your `CHEZMOI_REPO` should be a GitHub repo that `chezmoi init --apply` can consume (see [fuJiin/dotfiles](https://github.com/fuJiin/dotfiles) for an example).
 
+Today, Claude Code is installed directly by `imir` during bake and per-box bootstrap. For personal tools like Codex, prefer keeping the installer in your dotfiles repo and using `BAKE_USER_HOOK` only to preinstall it into the baked image.
+
 ## Snapshots
 
 Bootstrap is split into two phases:
@@ -101,9 +104,18 @@ Bootstrap is split into two phases:
 
 Run `imir bake` to snapshot the first phase into a Hetzner image. Subsequent `imir create` calls use that snapshot and skip straight to per-box setup.
 
-Set `BAKE_HOOK` to a local script path to run custom setup during bake (e.g. Doom Emacs, language runtimes). The hook runs as root after system packages are installed. Its hash is included in staleness detection, so changing the hook triggers a rebuild warning.
+Set `BAKE_HOOK` to a local script path to run system-level setup during bake (e.g. apt packages, language runtimes). Set `BAKE_USER_HOOK` to run user-level setup as `dev` (e.g. a Codex installer that writes into `~/.local` or `~/.config`). Hook contents are included in staleness detection, so changing either hook triggers a rebuild warning.
 
-The snapshot is tagged with a hash of the bake script (and hook). If you update either (e.g. via `imir upgrade`), `create` will warn that the snapshot is stale. Run `imir bake` again to rebuild it.
+The snapshot is tagged with a hash of the bake script and any configured hooks. If you update any of them (e.g. via `imir upgrade`), `create` will warn that the snapshot is stale. Run `imir bake` again to rebuild it.
+
+### Hybrid tool installs
+
+The clean split is:
+
+- `chezmoi` owns your personal toolchain and shell/config state.
+- `imir` owns box lifecycle and snapshot speed.
+
+For Codex, keep the real installer in your dotfiles repo, make it idempotent, and optionally point `BAKE_USER_HOOK` at a local wrapper that invokes that same installer during `imir bake`. That gives you one source of truth for laptops and dev boxes, while still baking the tool into snapshots for faster startup.
 
 ## Further reading
 

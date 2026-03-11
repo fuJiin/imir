@@ -61,4 +61,9 @@ if [[ -f /tmp/imir-bake-hook ]]; then
     bash /tmp/imir-bake-hook
 fi
 
+if [[ -f /tmp/imir-bake-user-hook ]]; then
+    echo "Running user bake hook as $DEV_USER..."
+    sudo -Hu "$DEV_USER" bash /tmp/imir-bake-user-hook
+fi
+
 echo "=== Bake complete ==="
