@@ -73,6 +73,7 @@ Commands:
   bake     [--force]         Bake a snapshot for faster box creation
   connect  <name> [session]  SSH into a box and attach to a tmux session
   ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
+  tunnel   <name> <port>...  Forward local ports to a box (PORT or LOCAL:REMOTE)
   ip       <name>            Print a box's IP address
   sessions <name>            List tmux sessions on a box
   kill-session <name> <ses>  Kill a tmux session on a box
@@ -491,6 +492,41 @@ cmd::ip() {
     imir::server_ip "$name" || exit 1
 }
 
+cmd::tunnel() {
+    local name="${1:?Usage: imir tunnel <name> <port>[:remote_port] [<port>[:remote_port]...]}"
+    shift
+    if [[ $# -eq 0 ]]; then
+        echo "Usage: imir tunnel <name> <port>[:remote_port] [<port>[:remote_port]...]" >&2
+        exit 1
+    fi
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    local forward_flags=()
+    local spec local_port remote_port
+    for spec in "$@"; do
+        if [[ "$spec" == *:* ]]; then
+            local_port="${spec%%:*}"
+            remote_port="${spec##*:}"
+        else
+            local_port="$spec"
+            remote_port="$spec"
+        fi
+        if ! [[ "$local_port" =~ ^[0-9]+$ && "$remote_port" =~ ^[0-9]+$ ]]; then
+            echo "Error: invalid port spec '$spec'. Use PORT or LOCAL:REMOTE." >&2
+            exit 1
+        fi
+        forward_flags+=(-L "${local_port}:localhost:${remote_port}")
+        echo "Forwarding localhost:${local_port} -> ${name}:${remote_port}"
+    done
+
+    echo "Press Ctrl-C to close tunnel."
+    exec ssh -N -i "$ssh_key" "${forward_flags[@]}" dev@"$ip"
+}
+
 cmd::rename() {
     local old="${1:?Usage: imir rename <old-name> <new-name>}"
     local new="${2:?Usage: imir rename <old-name> <new-name>}"
@@ -589,7 +625,7 @@ case "$command" in
     upgrade)   cmd::upgrade "$@" ;;
     -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
-    create|bake|connect|ssh|ip|destroy|list|rename|sessions|kill-session)
+    create|bake|connect|ssh|tunnel|ip|destroy|list|rename|sessions|kill-session)
         imir::load_config
         "cmd::$command" "$@"
         ;;
