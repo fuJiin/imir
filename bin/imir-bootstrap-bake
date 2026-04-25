@@ -11,23 +11,18 @@ cloud-init status --wait 2>/dev/null || true
 
 # ── System packages ────────────────────────────────────────────────
 
-echo "Adding GitHub CLI apt repository..."
-mkdir -p -m 755 /etc/apt/keyrings
-curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-    -o /etc/apt/keyrings/githubcli-archive-keyring.gpg
-chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-    > /etc/apt/sources.list.d/github-cli.list
-
-echo "Installing system packages..."
+echo "Installing minimal system packages..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
-    git \
-    gh \
-    tmux \
     curl \
-    unzip
+    git \
+    tmux
+
+# ── chezmoi ────────────────────────────────────────────────────────
+
+echo "Installing chezmoi..."
+sh -c "$(curl -fsLS get.chezmoi.io)" -- -b /usr/local/bin
 
 # ── Dev user ───────────────────────────────────────────────────────
 
@@ -49,12 +44,7 @@ system_info:
     sudo: ALL=(ALL) NOPASSWD:ALL
 CLOUD
 
-# ── Claude Code ────────────────────────────────────────────────────
-
-echo "Installing Claude Code..."
-sudo -Hu "$DEV_USER" bash -c 'curl -fsSL https://claude.ai/install.sh | bash'
-
-# ── User bake hook ─────────────────────────────────────────────────
+# ── Optional hooks ─────────────────────────────────────────────────
 
 if [[ -f /tmp/imir-bake-hook ]]; then
     echo "Running bake hook..."
