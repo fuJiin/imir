@@ -51,6 +51,18 @@ imir::bake_user_hook() {
     imir::optional_file "BAKE_USER_HOOK=${BAKE_USER_HOOK:-}" "${BAKE_USER_HOOK:-}"
 }
 
+imir::tunnels_dir() {
+    local dir="$IMIR_CONFIG_DIR/tunnels"
+    mkdir -p "$dir"
+    echo "$dir"
+}
+
+imir::read_tunnel_field() {
+    local file="$1"
+    local key="$2"
+    awk -v k="$key" 'index($0, k"=") == 1 { sub("^"k"=", ""); print; exit }' "$file" 2>/dev/null
+}
+
 imir::server_ip() {
     local name="$1"
     local ip
@@ -73,7 +85,9 @@ Commands:
   bake     [--force]         Bake a snapshot for faster box creation
   connect  <name> [session]  SSH into a box and attach to a tmux session
   ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
-  tunnel   <name> <port>...  Forward local ports to a box (PORT or LOCAL:REMOTE)
+  tunnel   [-d] <name> <port>...  Forward local ports (-d runs in background)
+  tunnels                    List background tunnels
+  kill-tunnel <name|pid>     Close a background tunnel
   ip       <name>            Print a box's IP address
   sessions <name>            List tmux sessions on a box
   kill-session <name> <ses>  Kill a tmux session on a box
@@ -493,10 +507,17 @@ cmd::ip() {
 }
 
 cmd::tunnel() {
-    local name="${1:?Usage: imir tunnel <name> <port>[:remote_port] [<port>[:remote_port]...]}"
+    local daemon=false
+    if [[ "${1:-}" == "-d" || "${1:-}" == "--daemon" ]]; then
+        daemon=true
+        shift
+    fi
+
+    local usage="Usage: imir tunnel [-d|--daemon] <name> <port>[:remote_port] [<port>[:remote_port]...]"
+    local name="${1:?$usage}"
     shift
     if [[ $# -eq 0 ]]; then
-        echo "Usage: imir tunnel <name> <port>[:remote_port] [<port>[:remote_port]...]" >&2
+        echo "$usage" >&2
         exit 1
     fi
     local ssh_key
@@ -506,6 +527,7 @@ cmd::tunnel() {
     ip=$(imir::server_ip "$name") || exit 1
 
     local forward_flags=()
+    local forward_specs=()
     local spec local_port remote_port
     for spec in "$@"; do
         if [[ "$spec" == *:* ]]; then
@@ -520,11 +542,97 @@ cmd::tunnel() {
             exit 1
         fi
         forward_flags+=(-L "${local_port}:localhost:${remote_port}")
+        forward_specs+=("${local_port}:${remote_port}")
         echo "Forwarding localhost:${local_port} -> ${name}:${remote_port}"
     done
 
+    if [[ "$daemon" == true ]]; then
+        local tunnels_dir
+        tunnels_dir=$(imir::tunnels_dir)
+        nohup ssh -N \
+            -o ExitOnForwardFailure=yes \
+            -o ServerAliveInterval=60 \
+            -i "$ssh_key" "${forward_flags[@]}" dev@"$ip" \
+            </dev/null >/dev/null 2>&1 &
+        local ssh_pid=$!
+        disown
+        sleep 1
+        if ! kill -0 "$ssh_pid" 2>/dev/null; then
+            echo "Error: tunnel failed to start (check that local ports are free)." >&2
+            exit 1
+        fi
+        {
+            echo "NAME=$name"
+            echo "IP=$ip"
+            echo "PORTS=${forward_specs[*]}"
+            echo "STARTED=$(date '+%Y-%m-%d %H:%M:%S')"
+        } > "$tunnels_dir/$ssh_pid.tunnel"
+        echo "Tunnel running in background (pid: $ssh_pid)."
+        echo "List: 'imir tunnels'   Close: 'imir kill-tunnel $name'"
+        return
+    fi
+
     echo "Press Ctrl-C to close tunnel."
     exec ssh -N -i "$ssh_key" "${forward_flags[@]}" dev@"$ip"
+}
+
+cmd::tunnels() {
+    local tunnels_dir
+    tunnels_dir=$(imir::tunnels_dir)
+
+    local rows=()
+    local f pid name ports started
+    shopt -s nullglob
+    for f in "$tunnels_dir"/*.tunnel; do
+        pid=$(basename "$f" .tunnel)
+        if ! kill -0 "$pid" 2>/dev/null; then
+            rm -f "$f"
+            continue
+        fi
+        name=$(imir::read_tunnel_field "$f" NAME)
+        ports=$(imir::read_tunnel_field "$f" PORTS)
+        started=$(imir::read_tunnel_field "$f" STARTED)
+        rows+=("$name"$'\t'"$pid"$'\t'"$ports"$'\t'"$started")
+    done
+    shopt -u nullglob
+
+    if [[ ${#rows[@]} -eq 0 ]]; then
+        echo "No tunnels running."
+        return
+    fi
+
+    {
+        printf "NAME\tPID\tPORTS\tSTARTED\n"
+        printf "%s\n" "${rows[@]}"
+    } | column -t -s $'\t'
+}
+
+cmd::kill-tunnel() {
+    local target="${1:?Usage: imir kill-tunnel <name|pid>}"
+    local tunnels_dir
+    tunnels_dir=$(imir::tunnels_dir)
+
+    local killed=0
+    local f pid name
+    shopt -s nullglob
+    for f in "$tunnels_dir"/*.tunnel; do
+        pid=$(basename "$f" .tunnel)
+        name=$(imir::read_tunnel_field "$f" NAME)
+        if [[ "$pid" == "$target" || "$name" == "$target" ]]; then
+            if kill -0 "$pid" 2>/dev/null; then
+                kill "$pid" 2>/dev/null || true
+                echo "Closed tunnel pid $pid (box: $name)."
+                killed=$((killed + 1))
+            fi
+            rm -f "$f"
+        fi
+    done
+    shopt -u nullglob
+
+    if [[ "$killed" -eq 0 ]]; then
+        echo "No matching tunnel found." >&2
+        exit 1
+    fi
 }
 
 cmd::rename() {
@@ -625,7 +733,7 @@ case "$command" in
     upgrade)   cmd::upgrade "$@" ;;
     -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
-    create|bake|connect|ssh|tunnel|ip|destroy|list|rename|sessions|kill-session)
+    create|bake|connect|ssh|tunnel|tunnels|kill-tunnel|ip|destroy|list|rename|sessions|kill-session)
         imir::load_config
         "cmd::$command" "$@"
         ;;

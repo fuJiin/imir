@@ -55,6 +55,9 @@ imir connect myproject
 | `imir bake [--force]` | Bake a snapshot for faster box creation. |
 | `imir connect <name> [session]` | SSH + tmux session (default: `default`). |
 | `imir ssh <name> [cmd...]` | Plain SSH, no tmux. Runs a command if given. |
+| `imir tunnel [-d] <name> <port>...` | Forward local ports to a box (`-d` runs in background). Port spec is `PORT` or `LOCAL:REMOTE`. |
+| `imir tunnels` | List background tunnels. |
+| `imir kill-tunnel <name\|pid>` | Close a background tunnel. |
 | `imir ip <name>` | Print a box's IP address. |
 | `imir sessions <name>` | List tmux sessions on a box. |
 | `imir kill-session <name> <session>` | Kill a tmux session on a box. |
