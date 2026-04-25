@@ -6,7 +6,7 @@ IMIR_BIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 IMIR_CONFIG_DIR="${IMIR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/imir}"
 IMIR_CONFIG="$IMIR_CONFIG_DIR/config.env"
 
-# ── Helpers ───────────────────────────────────────────────────────────
+# ── Helpers ────────────────────────────────────────────────────────────────
 
 imir::load_config() {
     if [[ ! -f "$IMIR_CONFIG" ]]; then
@@ -67,26 +67,26 @@ imir::usage() {
 Usage: imir <command> [args]
 
 Commands:
-  init                       Create config file at ~/.config/imir/config.env
-  uninstall                  Remove imir and all its files
-  create   <name> [type]     Create and bootstrap a new dev box
-  bake     [--force]         Bake a snapshot for faster box creation
-  connect  <name> [session]  SSH into a box and attach to a tmux session
-  ssh      <name> [cmd...]   Plain SSH (no tmux). Runs cmd if given
-  tunnel   <name> <port>...  Forward local ports to a box (PORT or LOCAL:REMOTE)
-  ip       <name>            Print a box's IP address
-  sessions <name>            List tmux sessions on a box
-  kill-session <name> <ses>  Kill a tmux session on a box
-  list                       Show all running imir-managed dev boxes
-  rename   <old> <new>       Rename a dev box
-  destroy  [-f] <name>       Destroy a dev box and clean up known_hosts
-  upgrade                    Upgrade imir to the latest version
-  help                       Show this help message
+  init                                              Create config file at ~/.config/imir/config.env
+  uninstall                                         Remove imir and all its files
+  create   [--dotfiles <owner/repo>] <name> [type]  Create and bootstrap a new dev box
+  bake     [--force]                                Bake a snapshot for faster box creation
+  connect  <name> [session]                         SSH into a box and attach to a tmux session
+  ssh      <name> [cmd...]                          Plain SSH (no tmux). Runs cmd if given
+  tunnel   <name> <port>...                         Forward local ports (PORT or LOCAL:REMOTE)
+  ip       <name>                                   Print a box's IP address
+  sessions <name>                                   List tmux sessions on a box
+  kill-session <name> <ses>                         Kill a tmux session on a box
+  list                                              Show all running imir-managed dev boxes
+  rename   <old> <new>                              Rename a dev box
+  destroy  [-f] <name>                              Destroy a dev box and clean up known_hosts
+  upgrade                                           Upgrade imir to the latest version
+  help                                              Show this help message
 
 EOF
 }
 
-# ── Commands ──────────────────────────────────────────────────────────
+# ── Commands ────────────────────────────────────────────────────────────────
 
 cmd::init() {
     if [[ -f "$IMIR_CONFIG" ]]; then
@@ -103,7 +103,8 @@ HCLOUD_TOKEN=
 # SSH key (local path to private key; .pub will be auto-detected)
 SSH_KEY_PATH=~/.ssh/id_rsa
 
-# Chezmoi dotfiles repo (GitHub shorthand, e.g. youruser/dotfiles)
+# Default chezmoi dotfiles repo (GitHub shorthand, e.g. youruser/dotfiles).
+# Override per-box with: imir create --dotfiles <owner/repo> <name>
 CHEZMOI_REPO=
 
 # Server defaults
@@ -137,7 +138,6 @@ cmd::uninstall() {
         echo "  - $IMIR_CONFIG_DIR/ (contains your config and API token)"
     fi
 
-    # Check for running boxes and snapshots
     if [[ -f "$IMIR_CONFIG" ]]; then
         source "$IMIR_CONFIG"
         export HCLOUD_TOKEN
@@ -203,7 +203,6 @@ cmd::bake() {
     local bake_user_hook
     bake_user_hook=$(imir::bake_user_hook)
 
-    # Hash bake script and optional hooks for staleness detection.
     local bake_hash
     local hash_note=""
     if [[ -n "$bake_hook" && -n "$bake_user_hook" ]]; then
@@ -220,7 +219,6 @@ cmd::bake() {
     fi
     echo "Bake script hash: $bake_hash$hash_note"
 
-    # Check if a snapshot with this hash already exists
     local existing_snapshot
     existing_snapshot=$(hcloud image list --type snapshot -l managed-by=imir -l "bake-hash=$bake_hash" -o noheader -o columns=id 2>/dev/null | head -1 || true)
     if [[ -n "$existing_snapshot" && "$force" != "true" ]]; then
@@ -229,7 +227,6 @@ cmd::bake() {
         return
     fi
 
-    # Check for leftover temp server
     if hcloud server describe imir-bake-temp &>/dev/null; then
         echo "Warning: leftover temp server 'imir-bake-temp' found."
         read -rp "Delete it and continue? [y/N] " confirm
@@ -241,7 +238,6 @@ cmd::bake() {
         echo "Deleted leftover temp server."
     fi
 
-    # Ensure SSH keys exist
     local ssh_key
     ssh_key=$(imir::ssh_key)
     local imir_keys
@@ -257,7 +253,6 @@ cmd::bake() {
         ssh_key_flags+=(--ssh-key "$key")
     done <<< "$imir_keys"
 
-    # Create temp server
     echo "Creating temp server for baking..."
     hcloud server create \
         --name imir-bake-temp \
@@ -270,10 +265,8 @@ cmd::bake() {
     local ip
     ip=$(hcloud server ip imir-bake-temp)
 
-    # Clean stale host key (same IP may be reused across servers)
     ssh-keygen -R "$ip" 2>/dev/null || true
 
-    # Wait for SSH
     echo "Waiting for SSH..."
     for i in $(seq 1 30); do
         if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$ssh_key" root@"$ip" true 2>/dev/null; then
@@ -286,7 +279,6 @@ cmd::bake() {
         sleep 2
     done
 
-    # Upload and run bake script
     echo "Running bake script..."
     scp -i "$ssh_key" "$bake_script" root@"$ip":/tmp/imir-bootstrap-bake
     if [[ -n "$bake_hook" ]]; then
@@ -297,10 +289,8 @@ cmd::bake() {
     fi
     ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap-bake"
 
-    # Power off server before snapshotting (graceful shutdown to flush fs buffers)
     echo "Powering off server..."
     ssh -i "$ssh_key" root@"$ip" "sync && shutdown -h now" 2>/dev/null || true
-    # Wait for poweroff
     for i in $(seq 1 30); do
         local status
         status=$(hcloud server describe imir-bake-temp -o format='{{.Status}}')
@@ -314,7 +304,6 @@ cmd::bake() {
         sleep 2
     done
 
-    # Create snapshot
     echo "Creating snapshot..."
     hcloud server create-image imir-bake-temp \
         --type snapshot \
@@ -322,12 +311,10 @@ cmd::bake() {
         --label managed-by=imir \
         --label "bake-hash=$bake_hash"
 
-    # Delete temp server
     echo "Deleting temp server..."
     hcloud server delete imir-bake-temp
     ssh-keygen -R "$ip" 2>/dev/null || true
 
-    # Delete old snapshots with different hashes
     local old_snapshots
     old_snapshots=$(hcloud image list --type snapshot -l managed-by=imir -o noheader -o columns=id,labels \
         | grep -v "bake-hash=$bake_hash" \
@@ -343,14 +330,60 @@ cmd::bake() {
 }
 
 cmd::create() {
-    local name="${1:?Usage: imir create <name> [server-type]}"
-    local server_type="${2:-$DEFAULT_SERVER_TYPE}"
+    local name=""
+    local server_type=""
+    local dotfiles="${CHEZMOI_REPO:-}"
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dotfiles)
+                if [[ $# -lt 2 ]]; then
+                    echo "Error: --dotfiles requires an argument (e.g. youruser/dotfiles)." >&2
+                    exit 1
+                fi
+                dotfiles="$2"
+                shift 2
+                ;;
+            --dotfiles=*)
+                dotfiles="${1#--dotfiles=}"
+                shift
+                ;;
+            --)
+                shift
+                break
+                ;;
+            -*)
+                echo "Error: unknown flag '$1'." >&2
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                elif [[ -z "$server_type" ]]; then
+                    server_type="$1"
+                else
+                    echo "Error: unexpected argument '$1'." >&2
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$name" ]]; then
+        echo "Usage: imir create [--dotfiles <owner/repo>] <name> [server-type]" >&2
+        exit 1
+    fi
+    server_type="${server_type:-$DEFAULT_SERVER_TYPE}"
+
     local ssh_key
     ssh_key=$(imir::ssh_key)
 
     echo "Creating dev box: $name ($server_type in $DEFAULT_LOCATION)..."
+    if [[ -n "$dotfiles" ]]; then
+        echo "Dotfiles: $dotfiles"
+    fi
 
-    # Look for an imir snapshot
     local snapshot_id=""
     local baked="false"
     local snapshot_line
@@ -358,7 +391,6 @@ cmd::create() {
     if [[ -n "$snapshot_line" ]]; then
         snapshot_id=$(echo "$snapshot_line" | awk '{print $1}')
 
-        # Staleness check
         local bake_script="$IMIR_BIN_DIR/imir-bootstrap-bake"
         if [[ -f "$bake_script" ]]; then
             local bake_hook
@@ -381,7 +413,6 @@ cmd::create() {
 
     local image="${snapshot_id:-$DEFAULT_IMAGE}"
 
-    # Ensure at least one imir-* SSH key exists in Hetzner
     local imir_keys
     imir_keys=$(hcloud ssh-key list -o noheader -o columns=name | grep '^imir-' || true)
     if [ -z "$imir_keys" ]; then
@@ -390,19 +421,16 @@ cmd::create() {
         imir_keys="imir-laptop"
     fi
 
-    # Check if server already exists
     if hcloud server describe "imir-$name" &>/dev/null; then
         echo "Error: dev box '$name' already exists. Use 'imir destroy' first."
         exit 1
     fi
 
-    # Build --ssh-key flags for all imir-* keys
     local ssh_key_flags=()
     while read -r key; do
         ssh_key_flags+=(--ssh-key "$key")
     done <<< "$imir_keys"
 
-    # Create server
     hcloud server create \
         --name "imir-$name" \
         --type "$server_type" \
@@ -411,15 +439,12 @@ cmd::create() {
         "${ssh_key_flags[@]}" \
         --label managed-by=imir
 
-    # Get IP
     local ip
     ip=$(hcloud server ip "imir-$name")
     echo "Server IP: $ip"
 
-    # Clean stale host key (same IP may be reused across servers)
     ssh-keygen -R "$ip" 2>/dev/null || true
 
-    # Wait for SSH to become available
     echo "Waiting for SSH..."
     for i in $(seq 1 30); do
         if ssh -o StrictHostKeyChecking=accept-new -o ConnectTimeout=5 -i "$ssh_key" root@"$ip" true 2>/dev/null; then
@@ -432,10 +457,9 @@ cmd::create() {
         sleep 2
     done
 
-    # Upload and run bootstrap (send both scripts for fallback path)
     echo "Bootstrapping..."
     scp -i "$ssh_key" "$IMIR_BIN_DIR/imir-bootstrap" "$IMIR_BIN_DIR/imir-bootstrap-bake" root@"$ip":/tmp/
-    ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$CHEZMOI_REPO' '$baked'"
+    ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$dotfiles' '$baked'"
 
     echo ""
     echo "Dev box '$name' is ready!"
@@ -460,11 +484,8 @@ cmd::connect() {
 
     local ssh_opts=(-A -i "$ssh_key")
 
-    # Devboxes don't have ghostty terminfo; fall back to xterm-256color.
-    # SSH sends the client's TERM to the remote, so setting it here is enough.
     export TERM=xterm-256color
 
-    # Attach to (or create) the named tmux session
     exec ssh "${ssh_opts[@]}" -t dev@"$ip" \
         "tmux new-session -As '$session'"
 }
@@ -531,7 +552,6 @@ cmd::rename() {
     local old="${1:?Usage: imir rename <old-name> <new-name>}"
     local new="${2:?Usage: imir rename <old-name> <new-name>}"
 
-    # Verify source exists
     imir::server_ip "$old" >/dev/null || exit 1
 
     hcloud server update "imir-$old" --name "imir-$new"
@@ -553,7 +573,6 @@ cmd::destroy() {
     ip=$(imir::server_ip "$name") || exit 1
 
     if [[ "$force" != true ]]; then
-        # Check for active tmux sessions
         local sessions
         sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>&1)
         if [[ $? -ne 0 ]]; then
@@ -579,7 +598,6 @@ cmd::destroy() {
     echo "Destroying dev box '$name' ($ip)..."
     hcloud server delete "imir-$name"
 
-    # Clean up known_hosts
     ssh-keygen -R "$ip" 2>/dev/null || true
 
     echo "Dev box '$name' destroyed."
@@ -614,7 +632,7 @@ cmd::kill-session() {
     echo "Killed session '$session' on '$name'."
 }
 
-# ── Dispatch ──────────────────────────────────────────────────────────
+# ── Dispatch ────────────────────────────────────────────────────────────────
 
 command="${1:-help}"
 shift || true

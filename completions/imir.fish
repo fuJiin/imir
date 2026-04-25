@@ -19,5 +19,8 @@ for cmd in connect ssh tunnel ip sessions kill-session rename destroy
         -a "(__imir_boxes)"
 end
 
+# Flags for create
+complete -c imir -n "__fish_seen_subcommand_from create" -l dotfiles -d "chezmoi repo (e.g. youruser/dotfiles)" -r
+
 # Flags for bake
 complete -c imir -n "__fish_seen_subcommand_from bake" -l force -d "Rebuild snapshot even if hash matches"
