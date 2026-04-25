@@ -33,6 +33,9 @@ end
 complete -c imir -n "__fish_seen_subcommand_from kill-tunnel" \
     -a "(__imir_tunnel_names)"
 
+# Flags for create
+complete -c imir -n "__fish_seen_subcommand_from create" -l dotfiles -d "chezmoi repo (e.g. youruser/dotfiles)" -r
+
 # Flags for bake
 complete -c imir -n "__fish_seen_subcommand_from bake" -l force -d "Rebuild snapshot even if hash matches"
 
