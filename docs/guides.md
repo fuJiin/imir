@@ -27,11 +27,11 @@ When you want full isolation — different repos, throwaway experiments, or dedi
 
 ```bash
 imir create frontend
-imir create backend cx32    # bigger box for heavy builds
-imir create experiment
+imir create backend cx32              # bigger box for heavy builds
+imir create crew-run --dotfiles fuJiin/dotfiles-crew  # agent box, different profile
 
-imir list                   # see all running boxes
-imir destroy experiment     # done with this one
+imir list                             # see all running boxes
+imir destroy crew-run                 # done with this one
 ```
 
 ## Connecting from your phone
@@ -72,7 +72,7 @@ ssh-add ~/.ssh/id_rsa  # add if needed
 
 ## GitHub CLI
 
-SSH agent forwarding covers `git push`, but `gh` needs its own auth for the GitHub API.
+`gh` ships via your dotfiles repo, not imir. SSH agent forwarding covers `git push`, but `gh` needs its own auth for the GitHub API.
 
 **Per-box setup** (run once after connecting):
 
@@ -98,7 +98,7 @@ Or add it at [github.com/settings/ssh/new](https://github.com/settings/ssh/new).
 
 ## Hybrid tool installs
 
-Use this when a tool should exist everywhere your dotfiles apply, but you also want it baked into `imir` snapshots.
+Use this when a tool should exist everywhere your dotfiles apply, but you also want it baked into `imir` snapshots for fast startup.
 
 1. Put the real installer in your chezmoi repo and make it idempotent.
 2. Keep shell/config wiring in chezmoi.
