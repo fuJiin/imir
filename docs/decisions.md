@@ -11,6 +11,7 @@
 | SSH agent forwarding | deploy keys | Boxes are transient — persistent credentials on a throwaway VM is a liability. Keys never leave your laptop. |
 | hcloud CLI | Terraform | Overkill for single-VM lifecycle. If this grows to multi-VM setups with networking/firewalls, revisit. |
 | Bare VM | Docker | Dev boxes need persistent tmux sessions, SSH access, and full OS tooling. Docker *inside* the box is fine. |
+| Hardening is opt-in | Hardened by default | Most boxes are private throwaways behind pubkey-only SSH; default UFW/fail2ban/sshd-lockdown is friction without benefit. `imir harden` (or `create --public`) flips the threat model only when a box gets public DNS or exposed services. |
 
 ## Future work
 

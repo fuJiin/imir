@@ -81,7 +81,8 @@ Usage: imir <command> [args]
 Commands:
   init                                              Create config file at ~/.config/imir/config.env
   uninstall                                         Remove imir and all its files
-  create   [--dotfiles <owner/repo>] <name> [type]  Create and bootstrap a new dev box
+  create   [--dotfiles <owner/repo>] [--public [ports]] <name> [type]
+                                                    Create and bootstrap a new dev box
   bake     [--force]                                Bake a snapshot for faster box creation
   connect  <name> [session]                         SSH into a box and attach to a tmux session
   ssh      <name> [cmd...]                          Plain SSH (no tmux). Runs cmd if given
@@ -94,6 +95,7 @@ Commands:
   list                                              Show all running imir-managed dev boxes
   rename   <old> <new>                              Rename a dev box
   destroy  [-f] <name>                              Destroy a dev box and clean up known_hosts
+  harden   <name> [--ports <p,p,...>]               Lock down a box for public internet exposure
   upgrade                                           Upgrade imir to the latest version
   help                                              Show this help message
 
@@ -142,6 +144,7 @@ cmd::uninstall() {
     echo "  - $IMIR_BIN_DIR/imir"
     echo "  - $IMIR_BIN_DIR/imir-bootstrap"
     echo "  - $IMIR_BIN_DIR/imir-bootstrap-bake"
+    echo "  - $IMIR_BIN_DIR/imir-harden"
 
     local fish_comp="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/imir.fish"
     if [[ -f "$fish_comp" ]]; then
@@ -183,6 +186,7 @@ cmd::uninstall() {
 
     rm -f "$fish_comp"
     rm -rf "$IMIR_CONFIG_DIR"
+    rm -f "$IMIR_BIN_DIR/imir-harden"
     rm -f "$IMIR_BIN_DIR/imir-bootstrap-bake"
     rm -f "$IMIR_BIN_DIR/imir-bootstrap"
     rm -f "$IMIR_BIN_DIR/imir"
@@ -347,6 +351,8 @@ cmd::create() {
     local name=""
     local server_type=""
     local dotfiles="${CHEZMOI_REPO:-}"
+    local public=false
+    local public_ports=""
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
@@ -360,6 +366,20 @@ cmd::create() {
                 ;;
             --dotfiles=*)
                 dotfiles="${1#--dotfiles=}"
+                shift
+                ;;
+            --public)
+                public=true
+                if [[ "${2:-}" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+                    public_ports="$2"
+                    shift 2
+                else
+                    shift
+                fi
+                ;;
+            --public=*)
+                public=true
+                public_ports="${1#--public=}"
                 shift
                 ;;
             --)
@@ -474,6 +494,21 @@ cmd::create() {
     echo "Bootstrapping..."
     scp -i "$ssh_key" "$IMIR_BIN_DIR/imir-bootstrap" "$IMIR_BIN_DIR/imir-bootstrap-bake" root@"$ip":/tmp/
     ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-bootstrap '$dotfiles' '$baked'"
+
+    if [[ "$public" == true ]]; then
+        local harden_script="$IMIR_BIN_DIR/imir-harden"
+        if [[ ! -f "$harden_script" ]]; then
+            echo "Warning: $harden_script not found — skipping --public hardening." >&2
+        else
+            echo "Hardening for public exposure..."
+            scp -i "$ssh_key" "$harden_script" root@"$ip":/tmp/imir-harden
+            local harden_args=""
+            if [[ -n "$public_ports" ]]; then
+                harden_args="--ports '$public_ports'"
+            fi
+            ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-harden $harden_args"
+        fi
+    fi
 
     echo ""
     echo "Dev box '$name' is ready!"
@@ -711,6 +746,66 @@ cmd::destroy() {
     echo "Dev box '$name' destroyed."
 }
 
+cmd::harden() {
+    local name=""
+    local extra_ports=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --ports|--port)
+                if [[ $# -lt 2 ]]; then
+                    echo "Error: $1 requires an argument (e.g. 80,443)." >&2
+                    exit 1
+                fi
+                extra_ports="$2"
+                shift 2
+                ;;
+            --ports=*|--port=*)
+                extra_ports="${1#*=}"
+                shift
+                ;;
+            -*)
+                echo "Error: unknown flag '$1'." >&2
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    echo "Error: unexpected argument '$1'." >&2
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$name" ]]; then
+        echo "Usage: imir harden <name> [--ports <port,port,...>]" >&2
+        exit 1
+    fi
+
+    local script="$IMIR_BIN_DIR/imir-harden"
+    if [[ ! -f "$script" ]]; then
+        echo "Error: $script not found." >&2
+        exit 1
+    fi
+
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    echo "Hardening dev box '$name' ($ip)..."
+    scp -i "$ssh_key" "$script" dev@"$ip":/tmp/imir-harden
+    local args=""
+    if [[ -n "$extra_ports" ]]; then
+        args="--ports '$extra_ports'"
+    fi
+    ssh -A -i "$ssh_key" -t dev@"$ip" "sudo bash /tmp/imir-harden $args"
+}
+
 cmd::list() {
     hcloud server list -l managed-by=imir -o columns=name,ipv4,status,location \
         | sed 's/^imir-//'
@@ -751,7 +846,7 @@ case "$command" in
     upgrade)   cmd::upgrade "$@" ;;
     -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
-    create|bake|connect|ssh|tunnel|tunnels|kill-tunnel|ip|destroy|list|rename|sessions|kill-session)
+    create|bake|connect|ssh|tunnel|tunnels|kill-tunnel|ip|destroy|harden|list|rename|sessions|kill-session)
         imir::load_config
         "cmd::$command" "$@"
         ;;

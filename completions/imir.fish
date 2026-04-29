@@ -20,11 +20,11 @@ function __imir_tunnel_names
 end
 
 # Subcommands (only when no subcommand yet)
-complete -c imir -n "not __fish_seen_subcommand_from init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy help" \
-    -a "init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy help"
+complete -c imir -n "not __fish_seen_subcommand_from init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy harden help" \
+    -a "init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy harden help"
 
 # Box name completions for commands that take <name>
-for cmd in connect ssh tunnel ip sessions kill-session rename destroy
+for cmd in connect ssh tunnel ip sessions kill-session rename destroy harden
     complete -c imir -n "__fish_seen_subcommand_from $cmd; and not __fish_seen_subcommand_from (__imir_boxes)" \
         -a "(__imir_boxes)"
 end
@@ -35,6 +35,10 @@ complete -c imir -n "__fish_seen_subcommand_from kill-tunnel" \
 
 # Flags for create
 complete -c imir -n "__fish_seen_subcommand_from create" -l dotfiles -d "chezmoi repo (e.g. youruser/dotfiles)" -r
+complete -c imir -n "__fish_seen_subcommand_from create" -l public -d "Harden box for public exposure (optional ports, e.g. 80,443)"
+
+# Flags for harden
+complete -c imir -n "__fish_seen_subcommand_from harden" -l ports -d "Comma-separated TCP ports to allow (e.g. 80,443)" -r
 
 # Flags for bake
 complete -c imir -n "__fish_seen_subcommand_from bake" -l force -d "Rebuild snapshot even if hash matches"

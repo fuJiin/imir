@@ -1,0 +1,111 @@
+#!/bin/bash
+# imir-harden — opt-in hardening for boxes that will be exposed to the internet.
+# Idempotent: safe to re-run.
+set -euo pipefail
+
+EXTRA_PORTS=""
+DEV_USER="dev"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --ports|--port)
+            EXTRA_PORTS="${2:-}"
+            shift 2
+            ;;
+        --ports=*|--port=*)
+            EXTRA_PORTS="${1#*=}"
+            shift
+            ;;
+        *)
+            echo "Error: unknown argument '$1'." >&2
+            echo "Usage: imir-harden [--ports <port,port,...>]" >&2
+            exit 1
+            ;;
+    esac
+done
+
+if [[ "${EUID:-$(id -u)}" -ne 0 ]]; then
+    echo "Error: imir-harden must run as root (use sudo)." >&2
+    exit 1
+fi
+
+echo "=== imir harden ==="
+
+# ── Safety: don't lock ourselves out ──────────────────────────────
+DEV_AUTH="/home/$DEV_USER/.ssh/authorized_keys"
+if [[ ! -s "$DEV_AUTH" ]]; then
+    echo "Error: $DEV_AUTH is missing or empty." >&2
+    echo "Disabling root SSH and password auth would lock you out." >&2
+    exit 1
+fi
+
+# ── System updates ────────────────────────────────────────────────
+echo "→ Updating system packages..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update -qq
+apt-get -y upgrade
+apt-get -y install ufw fail2ban unattended-upgrades
+
+systemctl enable --now unattended-upgrades >/dev/null
+
+# ── sshd lockdown via drop-in (first-match-wins, alphabetical order) ──
+echo "→ Hardening sshd..."
+mkdir -p /etc/ssh/sshd_config.d
+cat > /etc/ssh/sshd_config.d/00-imir-harden.conf <<'SSHD'
+# Managed by imir-harden. Re-run `imir harden` to refresh.
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+PermitRootLogin no
+PermitEmptyPasswords no
+X11Forwarding no
+SSHD
+chmod 644 /etc/ssh/sshd_config.d/00-imir-harden.conf
+
+sshd -t
+systemctl reload ssh
+
+# ── fail2ban ──────────────────────────────────────────────────────
+echo "→ Configuring fail2ban..."
+mkdir -p /etc/fail2ban/jail.d
+cat > /etc/fail2ban/jail.d/imir.conf <<'F2B'
+# Managed by imir-harden.
+[sshd]
+enabled  = true
+backend  = systemd
+maxretry = 5
+findtime = 10m
+bantime  = 1h
+F2B
+systemctl enable --now fail2ban >/dev/null
+systemctl restart fail2ban
+
+# ── UFW ───────────────────────────────────────────────────────────
+echo "→ Configuring ufw..."
+ufw --force reset >/dev/null
+ufw default deny incoming >/dev/null
+ufw default allow outgoing >/dev/null
+ufw allow 22/tcp comment 'ssh' >/dev/null
+
+if [[ -n "$EXTRA_PORTS" ]]; then
+    IFS=',' read -ra PORTS <<< "$EXTRA_PORTS"
+    for p in "${PORTS[@]}"; do
+        p="${p// /}"
+        [[ -z "$p" ]] && continue
+        if [[ ! "$p" =~ ^[0-9]+$ ]]; then
+            echo "Error: invalid port '$p' in --ports." >&2
+            exit 1
+        fi
+        ufw allow "${p}/tcp" comment 'imir-harden' >/dev/null
+        echo "  Allowed ${p}/tcp"
+    done
+fi
+
+ufw --force enable >/dev/null
+
+echo
+echo "=== Hardened ==="
+ufw status verbose
+echo
+if [[ -f /var/run/reboot-required ]]; then
+    echo "NOTE: /var/run/reboot-required exists — reboot to finish kernel/security updates."
+fi

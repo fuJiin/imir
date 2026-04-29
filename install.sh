@@ -25,6 +25,7 @@ COMMIT=$(curl -fsSL "https://api.github.com/repos/$REPO/commits/$BRANCH" \
 curl -fsSL "$BASE_URL/bin/imir" -o "$BIN_DIR/imir"
 curl -fsSL "$BASE_URL/bin/imir-bootstrap" -o "$BIN_DIR/imir-bootstrap"
 curl -fsSL "$BASE_URL/bin/imir-bootstrap-bake" -o "$BIN_DIR/imir-bootstrap-bake"
+curl -fsSL "$BASE_URL/bin/imir-harden" -o "$BIN_DIR/imir-harden"
 
 # Stamp version
 if [[ -n "${COMMIT:-}" ]]; then
@@ -32,7 +33,7 @@ if [[ -n "${COMMIT:-}" ]]; then
     rm -f "$BIN_DIR/imir.bak"
 fi
 
-chmod +x "$BIN_DIR/imir" "$BIN_DIR/imir-bootstrap" "$BIN_DIR/imir-bootstrap-bake"
+chmod +x "$BIN_DIR/imir" "$BIN_DIR/imir-bootstrap" "$BIN_DIR/imir-bootstrap-bake" "$BIN_DIR/imir-harden"
 
 # Install fish completions if fish is installed
 if command -v fish &>/dev/null; then

@@ -53,7 +53,7 @@ imir connect myproject
 | Command | Description |
 |---|---|
 | `imir init` | Create config file at `~/.config/imir/config.env`. |
-| `imir create [--dotfiles <owner/repo>] <name> [type]` | Create and bootstrap a new dev box. |
+| `imir create [--dotfiles <owner/repo>] [--public [ports]] <name> [type]` | Create and bootstrap a new dev box. `--public` runs `harden` after bootstrap. |
 | `imir bake [--force]` | Bake a snapshot for faster box creation. |
 | `imir connect <name> [session]` | SSH + tmux session (default: `default`). |
 | `imir ssh <name> [cmd...]` | Plain SSH, no tmux. Runs a command if given. |
@@ -66,6 +66,7 @@ imir connect myproject
 | `imir list` | Show all running dev boxes. |
 | `imir rename <old> <new>` | Rename a dev box. |
 | `imir destroy <name>` | Destroy a dev box and clean up known_hosts. |
+| `imir harden <name> [--ports 80,443]` | Lock down an existing box for public exposure (sshd, ufw, fail2ban, apt upgrade). Idempotent. |
 | `imir upgrade` | Upgrade imir to the latest version. |
 | `imir uninstall` | Remove imir and all its files. |
 
@@ -122,6 +123,31 @@ For tools you want everywhere your dotfiles apply *and* baked into snapshots for
 3. Set `BAKE_USER_HOOK` to a local wrapper that invokes the same installer during `imir bake`.
 
 One source of truth for laptops and dev boxes; the snapshot just preinstalls the result.
+
+## Public-facing boxes
+
+By default imir boxes are private dev boxes — only sshd:22 listens, and pubkey-only authentication keeps drive-by scanners out. The defaults are intentionally permissive (password auth on, root SSH on with keys) so a botched key never strands you.
+
+When you want to expose a box to the internet (e.g. host an HTTP service on a public hostname), run `imir harden`:
+
+```bash
+# Existing box: lock it down and open extra ports
+imir harden myproject --ports 80,443
+
+# Fresh box: bootstrap and harden in one go
+imir create --public 80,443 myproject
+```
+
+`harden` is idempotent and does:
+
+- `apt upgrade` and ensures `unattended-upgrades` is enabled
+- Drops `/etc/ssh/sshd_config.d/00-imir-harden.conf` with `PasswordAuthentication no`, `PermitRootLogin no`, `KbdInteractiveAuthentication no`, `X11Forwarding no` (validated with `sshd -t` before reload)
+- Installs and enables `fail2ban` with an sshd jail
+- Enables `ufw` with default-deny incoming, allowing 22/tcp plus anything in `--ports`
+
+It refuses to run if `/home/dev/.ssh/authorized_keys` is empty — disabling root SSH without a working `dev` key would lock you out.
+
+After hardening, root can no longer SSH in. Use `imir ssh`/`imir connect` (which already use `dev`) and `sudo` for elevation.
 
 ## Further reading
 
