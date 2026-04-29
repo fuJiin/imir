@@ -20,11 +20,11 @@ function __imir_tunnel_names
 end
 
 # Subcommands (only when no subcommand yet)
-complete -c imir -n "not __fish_seen_subcommand_from init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy harden help" \
-    -a "init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy harden help"
+complete -c imir -n "not __fish_seen_subcommand_from init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy harden proxy help" \
+    -a "init uninstall upgrade create bake connect ssh tunnel tunnels kill-tunnel ip sessions kill-session list rename destroy harden proxy help"
 
 # Box name completions for commands that take <name>
-for cmd in connect ssh tunnel ip sessions kill-session rename destroy harden
+for cmd in connect ssh tunnel ip sessions kill-session rename destroy harden proxy
     complete -c imir -n "__fish_seen_subcommand_from $cmd; and not __fish_seen_subcommand_from (__imir_boxes)" \
         -a "(__imir_boxes)"
 end
@@ -39,6 +39,10 @@ complete -c imir -n "__fish_seen_subcommand_from create" -l public -d "Harden bo
 
 # Flags for harden
 complete -c imir -n "__fish_seen_subcommand_from harden" -l ports -d "Comma-separated TCP ports to allow (e.g. 80,443)" -r
+
+# Flags for proxy
+complete -c imir -n "__fish_seen_subcommand_from proxy" -l route -d "Reverse-proxy routes (HOST=PORT[,HOST=PORT...])" -r
+complete -c imir -n "__fish_seen_subcommand_from proxy" -l email -d "ACME contact email for Let's Encrypt notifications" -r
 
 # Flags for bake
 complete -c imir -n "__fish_seen_subcommand_from bake" -l force -d "Rebuild snapshot even if hash matches"

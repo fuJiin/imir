@@ -67,6 +67,7 @@ imir connect myproject
 | `imir rename <old> <new>` | Rename a dev box. |
 | `imir destroy <name>` | Destroy a dev box and clean up known_hosts. |
 | `imir harden <name> [--ports 80,443]` | Lock down an existing box for public exposure (sshd, ufw, fail2ban, apt upgrade). Idempotent. |
+| `imir proxy <name> --route HOST=PORT[,...]` | Install/configure Caddy as a reverse proxy with auto-TLS. Idempotent. |
 | `imir upgrade` | Upgrade imir to the latest version. |
 | `imir uninstall` | Remove imir and all its files. |
 
@@ -151,6 +152,23 @@ It refuses to run if `/home/dev/.ssh/authorized_keys` is empty — disabling roo
 After hardening, root can no longer SSH in. Use `imir ssh`/`imir connect` (which already use `dev`) and `sudo` for elevation.
 
 Outbound traffic is left unrestricted at both layers: locking egress on a box that needs apt, git, Let's Encrypt, etc. is a footgun.
+
+### Reverse proxy with auto-TLS
+
+For HTTPS-fronted services, run an app on `localhost` and use `imir proxy` to put Caddy in front:
+
+```bash
+# Bind your service to 127.0.0.1:7842, then:
+imir proxy myproject --route api.example.com=7842
+# Multiple routes:
+imir proxy myproject --route api.example.com=7842,admin.example.com=8080
+# Optional: ACME contact for Let's Encrypt expiry notices
+imir proxy myproject --route api.example.com=7842 --email you@example.com
+```
+
+The script installs Caddy from its official apt repo (idempotent), generates `/etc/caddy/Caddyfile` from the `--route` flags, validates with `caddy validate`, and `systemctl reload`s. Caddy fetches Let's Encrypt certs automatically once DNS resolves to the box. Re-running with a different `--route` set replaces the file — gitops-style.
+
+Pair with `imir harden` (which already opens 80 and 443 by default in `--ports 80,443`) for the full public-host setup.
 
 ## Further reading
 

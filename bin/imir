@@ -174,6 +174,7 @@ Commands:
   rename   <old> <new>                              Rename a dev box
   destroy  [-f] <name>                              Destroy a dev box and clean up known_hosts
   harden   <name> [--ports <p,p,...>]               Lock down a box for public internet exposure
+  proxy    <name> --route <host>=<port>[,...]       Install/configure Caddy as a reverse proxy
   upgrade                                           Upgrade imir to the latest version
   help                                              Show this help message
 
@@ -223,6 +224,7 @@ cmd::uninstall() {
     echo "  - $IMIR_BIN_DIR/imir-bootstrap"
     echo "  - $IMIR_BIN_DIR/imir-bootstrap-bake"
     echo "  - $IMIR_BIN_DIR/imir-harden"
+    echo "  - $IMIR_BIN_DIR/imir-proxy"
 
     local fish_comp="${XDG_CONFIG_HOME:-$HOME/.config}/fish/completions/imir.fish"
     if [[ -f "$fish_comp" ]]; then
@@ -264,6 +266,7 @@ cmd::uninstall() {
 
     rm -f "$fish_comp"
     rm -rf "$IMIR_CONFIG_DIR"
+    rm -f "$IMIR_BIN_DIR/imir-proxy"
     rm -f "$IMIR_BIN_DIR/imir-harden"
     rm -f "$IMIR_BIN_DIR/imir-bootstrap-bake"
     rm -f "$IMIR_BIN_DIR/imir-bootstrap"
@@ -889,6 +892,83 @@ cmd::harden() {
     imir::firewall_sync "$name" "$extra_ports"
 }
 
+cmd::proxy() {
+    local name=""
+    local routes=""
+    local email=""
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --route|--routes)
+                if [[ $# -lt 2 ]]; then
+                    echo "Error: $1 requires HOST=PORT[,HOST=PORT...]." >&2
+                    exit 1
+                fi
+                routes="$2"
+                shift 2
+                ;;
+            --route=*|--routes=*)
+                routes="${1#*=}"
+                shift
+                ;;
+            --email)
+                if [[ $# -lt 2 ]]; then
+                    echo "Error: --email requires an address." >&2
+                    exit 1
+                fi
+                email="$2"
+                shift 2
+                ;;
+            --email=*)
+                email="${1#*=}"
+                shift
+                ;;
+            -*)
+                echo "Error: unknown flag '$1'." >&2
+                exit 1
+                ;;
+            *)
+                if [[ -z "$name" ]]; then
+                    name="$1"
+                else
+                    echo "Error: unexpected argument '$1'." >&2
+                    exit 1
+                fi
+                shift
+                ;;
+        esac
+    done
+
+    if [[ -z "$name" ]]; then
+        echo "Usage: imir proxy <name> --route HOST=PORT[,HOST=PORT...] [--email <addr>]" >&2
+        exit 1
+    fi
+    if [[ -z "$routes" ]]; then
+        echo "Error: --route is required." >&2
+        exit 1
+    fi
+
+    local script="$IMIR_BIN_DIR/imir-proxy"
+    if [[ ! -f "$script" ]]; then
+        echo "Error: $script not found." >&2
+        exit 1
+    fi
+
+    local ssh_key
+    ssh_key=$(imir::ssh_key)
+
+    local ip
+    ip=$(imir::server_ip "$name") || exit 1
+
+    echo "Configuring Caddy on '$name' ($ip)..."
+    scp -i "$ssh_key" "$script" dev@"$ip":/tmp/imir-proxy
+    local args="--route '$routes'"
+    if [[ -n "$email" ]]; then
+        args="$args --email '$email'"
+    fi
+    ssh -A -i "$ssh_key" -t dev@"$ip" "sudo bash /tmp/imir-proxy $args"
+}
+
 cmd::list() {
     hcloud server list -l managed-by=imir -o columns=name,ipv4,status,location \
         | sed 's/^imir-//'
@@ -929,7 +1009,7 @@ case "$command" in
     upgrade)   cmd::upgrade "$@" ;;
     -v|--version) echo "imir $IMIR_VERSION" ;;
     help|-h|--help) imir::usage ;;
-    create|bake|connect|ssh|tunnel|tunnels|kill-tunnel|ip|destroy|harden|list|rename|sessions|kill-session)
+    create|bake|connect|ssh|tunnel|tunnels|kill-tunnel|ip|destroy|harden|proxy|list|rename|sessions|kill-session)
         imir::load_config
         "cmd::$command" "$@"
         ;;

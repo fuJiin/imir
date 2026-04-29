@@ -26,6 +26,7 @@ curl -fsSL "$BASE_URL/bin/imir" -o "$BIN_DIR/imir"
 curl -fsSL "$BASE_URL/bin/imir-bootstrap" -o "$BIN_DIR/imir-bootstrap"
 curl -fsSL "$BASE_URL/bin/imir-bootstrap-bake" -o "$BIN_DIR/imir-bootstrap-bake"
 curl -fsSL "$BASE_URL/bin/imir-harden" -o "$BIN_DIR/imir-harden"
+curl -fsSL "$BASE_URL/bin/imir-proxy" -o "$BIN_DIR/imir-proxy"
 
 # Stamp version
 if [[ -n "${COMMIT:-}" ]]; then
@@ -33,7 +34,7 @@ if [[ -n "${COMMIT:-}" ]]; then
     rm -f "$BIN_DIR/imir.bak"
 fi
 
-chmod +x "$BIN_DIR/imir" "$BIN_DIR/imir-bootstrap" "$BIN_DIR/imir-bootstrap-bake" "$BIN_DIR/imir-harden"
+chmod +x "$BIN_DIR/imir" "$BIN_DIR/imir-bootstrap" "$BIN_DIR/imir-bootstrap-bake" "$BIN_DIR/imir-harden" "$BIN_DIR/imir-proxy"
 
 # Install fish completions if fish is installed
 if command -v fish &>/dev/null; then
