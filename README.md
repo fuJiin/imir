@@ -144,10 +144,13 @@ imir create --public 80,443 myproject
 - Drops `/etc/ssh/sshd_config.d/00-imir-harden.conf` with `PasswordAuthentication no`, `PermitRootLogin no`, `KbdInteractiveAuthentication no`, `X11Forwarding no` (validated with `sshd -t` before reload)
 - Installs and enables `fail2ban` with an sshd jail
 - Enables `ufw` with default-deny incoming, allowing 22/tcp plus anything in `--ports`
+- Creates a Hetzner Cloud Firewall named `imir-<name>` with the same rules and applies it to the server, so unwanted traffic is dropped at Hetzner's edge before it reaches the VM. Re-running `harden` syncs the rules; `imir destroy` cleans up the firewall (only if it carries the `managed-by=imir` label).
 
 It refuses to run if `/home/dev/.ssh/authorized_keys` is empty — disabling root SSH without a working `dev` key would lock you out.
 
 After hardening, root can no longer SSH in. Use `imir ssh`/`imir connect` (which already use `dev`) and `sudo` for elevation.
+
+Outbound traffic is left unrestricted at both layers: locking egress on a box that needs apt, git, Let's Encrypt, etc. is a footgun.
 
 ## Further reading
 

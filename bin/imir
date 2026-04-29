@@ -74,6 +74,84 @@ imir::server_ip() {
     echo "$ip"
 }
 
+imir::firewall_rules_json() {
+    # Args: comma-separated extra ports (port 22 is always added).
+    local extra_ports="${1:-}"
+    local ports=("22")
+    if [[ -n "$extra_ports" ]]; then
+        local IFS=','
+        local p
+        for p in $extra_ports; do
+            p="${p// /}"
+            [[ -z "$p" ]] && continue
+            if [[ ! "$p" =~ ^[0-9]+$ ]]; then
+                echo "Error: invalid port '$p' in --ports." >&2
+                return 1
+            fi
+            ports+=("$p")
+        done
+    fi
+    local out="["
+    local first=true p
+    for p in "${ports[@]}"; do
+        if [[ "$first" == true ]]; then first=false; else out+=","; fi
+        out+="{\"direction\":\"in\",\"protocol\":\"tcp\",\"port\":\"$p\",\"source_ips\":[\"0.0.0.0/0\",\"::/0\"]}"
+    done
+    out+="]"
+    echo "$out"
+}
+
+imir::firewall_sync() {
+    # Args: <name> <ports_csv>
+    # Creates or updates Hetzner firewall imir-<name>, applies it to imir-<name> server.
+    local name="$1"
+    local extra_ports="${2:-}"
+    local fw_name="imir-$name"
+
+    local rules_json
+    rules_json=$(imir::firewall_rules_json "$extra_ports") || return 1
+
+    if hcloud firewall describe "$fw_name" &>/dev/null; then
+        echo "Updating Hetzner firewall '$fw_name'..."
+        echo "$rules_json" | hcloud firewall replace-rules --rules-file - "$fw_name" >/dev/null
+    else
+        echo "Creating Hetzner firewall '$fw_name'..."
+        echo "$rules_json" | hcloud firewall create \
+            --name "$fw_name" \
+            --label managed-by=imir \
+            --label "imir-name=$name" \
+            --rules-file - >/dev/null
+    fi
+
+    local applied
+    applied=$(hcloud firewall describe "$fw_name" -o format='{{range .AppliedTo}}{{.Server.Name}} {{end}}' 2>/dev/null)
+    if [[ "$applied" != *"$fw_name"* ]]; then
+        hcloud firewall apply-to-resource "$fw_name" --type server --server "$fw_name" >/dev/null
+        echo "Applied '$fw_name' to server."
+    fi
+}
+
+imir::firewall_destroy() {
+    # Args: <name>
+    # Deletes imir-<name> firewall ONLY if labels confirm imir ownership.
+    local name="$1"
+    local fw_name="imir-$name"
+
+    hcloud firewall describe "$fw_name" &>/dev/null || return 0
+
+    local owned_by labeled_name
+    owned_by=$(hcloud firewall describe "$fw_name" -o format='{{index .Labels "managed-by"}}' 2>/dev/null)
+    labeled_name=$(hcloud firewall describe "$fw_name" -o format='{{index .Labels "imir-name"}}' 2>/dev/null)
+
+    if [[ "$owned_by" != "imir" || "$labeled_name" != "$name" ]]; then
+        echo "Skipping firewall '$fw_name' (not labeled as imir-managed for '$name')."
+        return 0
+    fi
+
+    echo "Deleting Hetzner firewall '$fw_name'..."
+    hcloud firewall delete "$fw_name" >/dev/null
+}
+
 imir::usage() {
     cat <<'EOF'
 Usage: imir <command> [args]
@@ -507,6 +585,7 @@ cmd::create() {
                 harden_args="--ports '$public_ports'"
             fi
             ssh -i "$ssh_key" root@"$ip" "bash /tmp/imir-harden $harden_args"
+            imir::firewall_sync "$name" "$public_ports"
         fi
     fi
 
@@ -741,6 +820,8 @@ cmd::destroy() {
     echo "Destroying dev box '$name' ($ip)..."
     hcloud server delete "imir-$name"
 
+    imir::firewall_destroy "$name"
+
     ssh-keygen -R "$ip" 2>/dev/null || true
 
     echo "Dev box '$name' destroyed."
@@ -804,6 +885,8 @@ cmd::harden() {
         args="--ports '$extra_ports'"
     fi
     ssh -A -i "$ssh_key" -t dev@"$ip" "sudo bash /tmp/imir-harden $args"
+
+    imir::firewall_sync "$name" "$extra_ports"
 }
 
 cmd::list() {

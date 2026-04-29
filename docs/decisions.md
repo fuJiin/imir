@@ -12,6 +12,7 @@
 | hcloud CLI | Terraform | Overkill for single-VM lifecycle. If this grows to multi-VM setups with networking/firewalls, revisit. |
 | Bare VM | Docker | Dev boxes need persistent tmux sessions, SSH access, and full OS tooling. Docker *inside* the box is fine. |
 | Hardening is opt-in | Hardened by default | Most boxes are private throwaways behind pubkey-only SSH; default UFW/fail2ban/sshd-lockdown is friction without benefit. `imir harden` (or `create --public`) flips the threat model only when a box gets public DNS or exposed services. |
+| Hetzner Cloud Firewall + UFW together | Cloud-only or host-only | `harden` configures both: same rule set, redundant layers. UFW survives if the firewall is detached; the cloud firewall holds if UFW is misconfigured or disabled. Inbound only; outbound is left at Hetzner's default-allow to avoid breaking apt/git/LE/MCP backends. Per-box firewall named `imir-<name>` with `managed-by=imir` labels so destroy can clean up safely. |
 
 ## Future work
 
