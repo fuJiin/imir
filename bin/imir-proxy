@@ -71,12 +71,13 @@ trap 'rm -f "$TMPFILE"' EXIT
 {
     echo "# Managed by imir-proxy. Re-run \`imir proxy\` to refresh."
     echo
+    echo "{"
+    echo "    acme_ca https://acme-v02.api.letsencrypt.org/directory"
     if [[ -n "$EMAIL" ]]; then
-        echo "{"
         echo "    email $EMAIL"
-        echo "}"
-        echo
     fi
+    echo "}"
+    echo
 } > "$TMPFILE"
 
 IFS=',' read -ra route_list <<< "$ROUTES"

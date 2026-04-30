@@ -168,6 +168,8 @@ imir proxy myproject --route api.example.com=7842 --email you@example.com
 
 The script installs Caddy from its official apt repo (idempotent), generates `/etc/caddy/Caddyfile` from the `--route` flags, validates with `caddy validate`, and `systemctl reload`s. Caddy fetches Let's Encrypt certs automatically once DNS resolves to the box. Re-running with a different `--route` set replaces the file — gitops-style.
 
+The generated Caddyfile pins `acme_ca` to LE production so Caddy never silently falls back to the staging issuer (which produces untrusted certs) after repeated prod failures. Set DNS to the box's IP **before** running `imir proxy` — otherwise Caddy will burn through ACME attempts trying to validate a hostname that doesn't resolve. If you do hit the failure path, `sudo systemctl restart caddy` resets the retry state.
+
 Pair with `imir harden` (which already opens 80 and 443 by default in `--ports 80,443`) for the full public-host setup.
 
 ## Further reading
