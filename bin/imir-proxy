@@ -96,6 +96,9 @@ for r in "${route_list[@]}"; do
     fi
     {
         echo "$host {"
+        echo "    log {"
+        echo "        format json"
+        echo "    }"
         echo "    reverse_proxy localhost:$port"
         echo "}"
         echo
