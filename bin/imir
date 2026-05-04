@@ -278,7 +278,7 @@ cmd::uninstall() {
 cmd::upgrade() {
     echo "Upgrading imir (current: $IMIR_VERSION)..."
     local installer
-    installer=$(curl -fsSL "https://raw.githubusercontent.com/fuJiin/imir/main/install.sh") || {
+    installer=$(curl -fsSL "https://raw.githubusercontent.com/triadic-org/imir/main/install.sh") || {
         echo "Error: failed to download installer." >&2
         exit 1
     }

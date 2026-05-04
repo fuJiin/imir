@@ -27,7 +27,7 @@ Take it or leave it. Or fork it and rebuild it with your own AI.
 ### Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/fuJiin/imir/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/triadic-org/imir/main/install.sh | bash
 ```
 
 Installs `imir` to `~/.local/bin` (or `/usr/local/bin`), fish completions, and creates a config at `~/.config/imir/config.env`.

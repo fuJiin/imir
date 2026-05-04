@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-REPO="fuJiin/imir"
+REPO="triadic-org/imir"
 BRANCH="main"
 BASE_URL="https://raw.githubusercontent.com/$REPO/$BRANCH"
 
