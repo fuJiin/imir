@@ -798,9 +798,12 @@ cmd::destroy() {
     ip=$(imir::server_ip "$name") || exit 1
 
     if [[ "$force" != true ]]; then
-        local sessions
-        sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>&1)
-        if [[ $? -ne 0 ]]; then
+        local sessions rc
+        # Don't let `set -e` abort here: tmux exits 1 when no server is running,
+        # and ssh exits 255 when the connection itself fails. Capture the code
+        # explicitly so we can tell those apart below.
+        sessions=$(ssh -A -i "$ssh_key" -o ConnectTimeout=5 -o StrictHostKeyChecking=no -o BatchMode=yes dev@"$ip" "tmux list-sessions -F '#{session_name}'" 2>&1) && rc=0 || rc=$?
+        if [[ $rc -eq 255 ]]; then
             echo "Warning: could not SSH into '$name':"
             echo "$sessions" | sed 's/^/  /'
             read -rp "Destroy anyway? [y/N] " confirm
@@ -808,7 +811,7 @@ cmd::destroy() {
                 echo "Cancelled."
                 return
             fi
-        elif [[ -n "$sessions" ]]; then
+        elif [[ $rc -eq 0 && -n "$sessions" ]]; then
             echo "Warning: '$name' has active tmux sessions:"
             echo "$sessions" | sed 's/^/  - /'
             echo ""
